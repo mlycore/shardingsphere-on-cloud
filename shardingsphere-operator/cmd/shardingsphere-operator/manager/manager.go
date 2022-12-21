@@ -24,6 +24,8 @@ import (
 
 	"github.com/apache/shardingsphere-on-cloud/shardingsphere-operator/api/v1alpha1"
 	"github.com/apache/shardingsphere-on-cloud/shardingsphere-operator/pkg/controllers"
+	dbmeshapi "github.com/database-mesh/golang-sdk/kubernetes/api/v1alpha1"
+	dbmesh "github.com/database-mesh/pisanix/pisa-controller/pkg/controllers"
 	"go.uber.org/zap/zapcore"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -42,6 +44,7 @@ var (
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(v1alpha1.AddToScheme(scheme))
+	utilruntime.Must(dbmeshapi.AddToScheme(scheme))
 }
 
 type Options struct {
@@ -103,6 +106,14 @@ func New(opts *Options) *Manager {
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "DistSQLJob")
+		os.Exit(1)
+	}
+
+	if err = (&dbmesh.VirtualDatabaseReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "VirtualDatabase")
 		os.Exit(1)
 	}
 
