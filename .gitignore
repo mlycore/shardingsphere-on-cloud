@@ -30,3 +30,5 @@ charts/apache-shardingsphere-operator-charts/charts/
 **/Chart.lock
 test
 certs
+**/.vscode/
+**/vendor/
