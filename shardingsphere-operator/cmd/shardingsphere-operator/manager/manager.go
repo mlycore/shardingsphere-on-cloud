@@ -89,6 +89,7 @@ func New(opts *Options) *Manager {
 		setupLog.Error(err, "unable to create controller", "controller", "ShardingSphereProxy")
 		os.Exit(1)
 	}
+
 	if err = (&controllers.ProxyConfigReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
@@ -96,6 +97,15 @@ func New(opts *Options) *Manager {
 		setupLog.Error(err, "unable to create controller", "controller", "ShardingSphereProxyServerConfig")
 		os.Exit(1)
 	}
+
+	if err = (&controllers.DistSQLJobReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "DistSQLJob")
+		os.Exit(1)
+	}
+
 	return &Manager{
 		Manager: mgr,
 	}
