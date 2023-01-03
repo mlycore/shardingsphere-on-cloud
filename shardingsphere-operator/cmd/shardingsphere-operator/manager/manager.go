@@ -48,6 +48,12 @@ func init() {
 
 type Options struct {
 	ctrl.Options
+	FeatureGateOptions
+}
+
+type FeatureGateOptions struct {
+	Cluster     bool
+	ComputeNode bool
 }
 
 func ParseOptionsFromFlags() *Options {
@@ -57,6 +63,8 @@ func ParseOptionsFromFlags() *Options {
 	flag.BoolVar(&opt.LeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
+	flag.BoolVar(&opt.Cluster, "feature-gate-cluster", false, "Enable support for CustomResourceDefinition Cluster. When enabled, ComputeNode is enabled at default.")
+	flag.BoolVar(&opt.ComputeNode, "feature-gate-compute-node", false, "Enable support for CustomResourceDefinition ComputeNode.")
 
 	opts := zap.Options{
 		Development: true,
@@ -99,6 +107,7 @@ func New(opts *Options) *Manager {
 		os.Exit(1)
 	}
 
+	// if opts.Cluster {
 	// if err = (&controllers.ClusterReconciler{
 	// 	Client: mgr.GetClient(),
 	// 	Scheme: mgr.GetScheme(),
@@ -106,13 +115,17 @@ func New(opts *Options) *Manager {
 	// 	setupLog.Error(err, "unable to create controller", "controller", "Cluster")
 	// 	os.Exit(1)
 	// }
-	if err = (&controllers.ComputeNodeReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "ComputeNode")
-		os.Exit(1)
+	// }
+	if opts.ComputeNode {
+		if err = (&controllers.ComputeNodeReconciler{
+			Client: mgr.GetClient(),
+			Scheme: mgr.GetScheme(),
+		}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "ComputeNode")
+			os.Exit(1)
+		}
 	}
+
 	return &Manager{
 		Manager: mgr,
 	}
