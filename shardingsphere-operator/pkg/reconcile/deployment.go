@@ -19,21 +19,177 @@ package reconcile
 
 import (
 	"fmt"
-	"reflect"
-	"strconv"
-	"strings"
 
 	"github.com/apache/shardingsphere-on-cloud/shardingsphere-operator/api/v1alpha1"
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
-func NewDeployment(ssproxy *v1alpha1.ShardingSphereProxy) *v1.Deployment {
-	return ConstructCascadingDeployment(ssproxy)
+// type DeploymentBuilder struct {
+// 	*v1.Deployment
+// }
+
+// func NewDeploymentBuilder() *DeploymentBuilder {
+// 	return &DeploymentBuilder{
+// 		Deployment: DefaultDeployment(),
+// 	}
+// }
+
+func NewDeployment(cn *v1alpha1.ComputeNode) *v1.Deployment {
+	deploy := DefaultDeployment(cn.GetObjectMeta(), cn.GroupVersionKind())
+
+	// basic information
+	deploy.Name = cn.Name
+	deploy.Namespace = cn.Namespace
+	deploy.Labels = cn.Labels
+	deploy.Spec.Selector.MatchLabels = cn.Labels
+	deploy.Spec.Replicas = &cn.Spec.Replicas
+	deploy.Spec.Template.Labels = cn.Labels
+	deploy.Spec.Template.Spec.Containers[0].Image = fmt.Sprintf("%s:%s", imageName, cn.Spec.Version)
+	// TODO: don't use v1.Port directly
+	deploy.Spec.Template.Spec.Containers[0].Ports = cn.Spec.Ports
+
+	// additional information
+	deploy.Spec.Template.Spec.Containers[0].Resources = cn.Spec.Resources
+	for _, v := range deploy.Spec.Template.Spec.Volumes {
+		if v.Name == "shardingsphere-proxy-config" {
+			v.ConfigMap.LocalObjectReference.Name = cn.Name
+		}
+	}
+
+	if cn.Spec.Probes != nil {
+		if cn.Spec.Probes.StartupProbe != nil {
+			deploy.Spec.Template.Spec.Containers[0].StartupProbe = cn.Spec.Probes.StartupProbe.DeepCopy()
+		}
+		if cn.Spec.Probes.LivenessProbe != nil {
+			deploy.Spec.Template.Spec.Containers[0].LivenessProbe = cn.Spec.Probes.LivenessProbe.DeepCopy()
+		}
+		if cn.Spec.Probes.ReadinessProbe != nil {
+			deploy.Spec.Template.Spec.Containers[0].ReadinessProbe = cn.Spec.Probes.ReadinessProbe.DeepCopy()
+		}
+	}
+	if len(cn.Spec.ImagePullSecrets) > 0 {
+		deploy.Spec.Template.Spec.ImagePullSecrets = cn.Spec.ImagePullSecrets
+	}
+	if cn.Spec.Connector.Type == v1alpha1.ConnectorTypeMySQL {
+		// add or update initContainer
+		if len(deploy.Spec.Template.Spec.InitContainers) > 0 {
+			for idx, v := range deploy.Spec.Template.Spec.InitContainers[0].Env {
+				if v.Name == "MYSQL_CONNECTOR_VERSION" {
+					deploy.Spec.Template.Spec.Containers[0].Env[idx].Value = cn.Spec.Connector.Version
+				}
+			}
+		} else {
+			deploy.Spec.Template.Spec.InitContainers = []corev1.Container{
+				{
+					Name:    "download-mysql-connect",
+					Image:   "busybox:1.35.0",
+					Command: []string{"/bin/sh", "-c", script},
+					Env: []corev1.EnvVar{
+						{
+							Name:  "MYSQL_CONNECTOR_VERSION",
+							Value: "5.1.47",
+						},
+					},
+					VolumeMounts: []corev1.VolumeMount{
+						{
+							Name:      "connectors",
+							MountPath: "/opt/shardingsphere-proxy/ext-lib",
+						},
+					},
+				},
+			}
+
+			deploy.Spec.Template.Spec.Containers[0].VolumeMounts = append(deploy.Spec.Template.Spec.Containers[0].VolumeMounts, corev1.VolumeMount{
+				Name:      "connectors",
+				MountPath: "/opt/shardingsphere-proxy/ext-lib",
+			})
+
+			deploy.Spec.Template.Spec.Volumes = append(deploy.Spec.Template.Spec.Volumes, corev1.Volume{
+				Name: "connectors",
+				VolumeSource: corev1.VolumeSource{
+					EmptyDir: &corev1.EmptyDirVolumeSource{},
+				},
+			})
+		}
+	}
+
+	return deploy
 }
-func ConstructCascadingDeployment(proxy *v1alpha1.ShardingSphereProxy) *v1.Deployment {
-	if proxy == nil || reflect.DeepEqual(proxy, &v1alpha1.ShardingSphereProxy{}) {
+
+func DefaultDeployment(meta metav1.Object, gvk schema.GroupVersionKind) *v1.Deployment {
+	defaultMaxUnavailable := intstr.FromInt(0)
+	defaultMaxSurge := intstr.FromInt(3)
+	defaultImage := "apache/shardingsphere-proxy:5.3.0"
+
+	return &v1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "shardingsphere-proxy",
+			Namespace: "default",
+			Labels:    map[string]string{},
+			OwnerReferences: []metav1.OwnerReference{
+				*metav1.NewControllerRef(meta, gvk),
+			},
+		},
+		Spec: v1.DeploymentSpec{
+			Strategy: v1.DeploymentStrategy{
+				Type: v1.RollingUpdateDeploymentStrategyType,
+				RollingUpdate: &v1.RollingUpdateDeployment{
+					MaxUnavailable: &defaultMaxUnavailable,
+					MaxSurge:       &defaultMaxSurge,
+				},
+			},
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{},
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:            "shardingsphere-proxy",
+							Image:           defaultImage,
+							ImagePullPolicy: corev1.PullIfNotPresent,
+							Ports: []corev1.ContainerPort{
+								{
+									Name:          "proxy",
+									ContainerPort: 3307,
+								},
+							},
+							VolumeMounts: []corev1.VolumeMount{
+								{
+									Name:      "shardingsphere-proxy-config",
+									MountPath: "/opt/shardingsphere-proxy/conf",
+								},
+							},
+						},
+					},
+					Volumes: []corev1.Volume{
+						{
+							Name: "shardingsphere-proxy-config",
+							VolumeSource: corev1.VolumeSource{
+								ConfigMap: &corev1.ConfigMapVolumeSource{
+									LocalObjectReference: corev1.LocalObjectReference{
+										Name: "shardingsphere-proxy-config",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+/*
+func ConstructCascadingDeployment(proxy *v1alpha1.ComputeNode) *v1.Deployment {
+	if proxy == nil || reflect.DeepEqual(proxy, &v1alpha1.ComputeNode{}) {
 		return &v1.Deployment{}
 	}
 
@@ -121,68 +277,79 @@ func ConstructCascadingDeployment(proxy *v1alpha1.ShardingSphereProxy) *v1.Deplo
 	}
 	return processOptionalParameter(proxy, dp)
 }
+*/
 
-func processOptionalParameter(proxy *v1alpha1.ShardingSphereProxy, dp *v1.Deployment) *v1.Deployment {
-	if proxy.Spec.MySQLDriver != nil {
-		addInitContainer(dp, proxy.Spec.MySQLDriver)
-	}
-	return dp
-}
+// func processOptionalParameter(proxy *v1alpha1.ShardingSphereProxy, dp *v1.Deployment) *v1.Deployment {
+// 	if proxy.Spec.MySQLDriver != nil {
+// 		addInitContainer(dp, proxy.Spec.MySQLDriver)
+// 	}
+// 	return dp
+// }
 
-const script = `wget https://repo1.maven.org/maven2/mysql/mysql-connector-java/${VERSION}/mysql-connector-java-${VERSION}.jar;
-wget https://repo1.maven.org/maven2/mysql/mysql-connector-java/${VERSION}/mysql-connector-java-${VERSION}.jar.md5;
-if [ $(md5sum /mysql-connector-java-${VERSION}.jar | cut -d ' ' -f1) = $(cat /mysql-connector-java-${VERSION}.jar.md5) ];
+const script = `wget https://repo1.maven.org/maven2/mysql/mysql-connector-java/${MYSQL_CONNECTOR_VERSION}/mysql-connector-java-${MYSQL_CONNECTOR_VERSION}.jar;
+wget https://repo1.maven.org/maven2/mysql/mysql-connector-java/${MYSQL_CONNECTOR_VERSION}/mysql-connector-java-${MYSQL_CONNECTOR_VERSION}.jar.md5;
+if [ $(md5sum /mysql-connector-java-${MYSQL_CONNECTOR_VERSION}.jar | cut -d ' ' -f1) = $(cat /mysql-connector-java-${MYSQL_CONNECTOR_VERSION}.jar.md5) ];
 then echo success;
-else echo failed;exit 1;fi;mv /mysql-connector-java-${VERSION}.jar /opt/shardingsphere-proxy/ext-lib`
+else echo failed;exit 1;fi;mv /mysql-connector-java-${MYSQL_CONNECTOR_VERSION}.jar /opt/shardingsphere-proxy/ext-lib`
 
-func addInitContainer(dp *v1.Deployment, mysql *v1alpha1.MySQLDriver) {
-	if len(dp.Spec.Template.Spec.InitContainers) == 0 {
-		dp.Spec.Template.Spec.Containers[0].VolumeMounts = append(dp.Spec.Template.Spec.Containers[0].VolumeMounts, corev1.VolumeMount{
-			Name:      "mysql-connect-jar",
-			MountPath: "/opt/shardingsphere-proxy/ext-lib",
-		})
+// func addInitContainer(dp *v1.Deployment, mysql *v1alpha1.MySQLDriver) {
+// 	if len(dp.Spec.Template.Spec.InitContainers) == 0 {
+// 		dp.Spec.Template.Spec.Containers[0].VolumeMounts = append(dp.Spec.Template.Spec.Containers[0].VolumeMounts, corev1.VolumeMount{
+// 			Name:      "mysql-connect-jar",
+// 			MountPath: "/opt/shardingsphere-proxy/ext-lib",
+// 		})
 
-		dp.Spec.Template.Spec.Volumes = append(dp.Spec.Template.Spec.Volumes, corev1.Volume{
-			Name: "mysql-connect-jar",
-			VolumeSource: corev1.VolumeSource{
-				EmptyDir: &corev1.EmptyDirVolumeSource{},
-			},
-		})
-	}
+// 		dp.Spec.Template.Spec.Volumes = append(dp.Spec.Template.Spec.Volumes, corev1.Volume{
+// 			Name: "mysql-connect-jar",
+// 			VolumeSource: corev1.VolumeSource{
+// 				EmptyDir: &corev1.EmptyDirVolumeSource{},
+// 			},
+// 		})
+// 	}
 
-	dp.Spec.Template.Spec.InitContainers = []corev1.Container{
-		{
-			Name:    "download-mysql-connect",
-			Image:   "busybox:1.35.0",
-			Command: []string{"/bin/sh", "-c", script},
-			Env: []corev1.EnvVar{
-				{
-					Name:  "VERSION",
-					Value: mysql.Version,
-				},
-			},
-			VolumeMounts: []corev1.VolumeMount{
-				{
-					Name:      "mysql-connect-jar",
-					MountPath: "/opt/shardingsphere-proxy/ext-lib",
-				},
-			},
-		},
-	}
+// 	dp.Spec.Template.Spec.InitContainers = []corev1.Container{
+// 		{
+// 			Name:    "download-mysql-connect",
+// 			Image:   "busybox:1.35.0",
+// 			Command: []string{"/bin/sh", "-c", script},
+// 			Env: []corev1.EnvVar{
+// 				{
+// 					Name:  "VERSION",
+// 					Value: mysql.Version,
+// 				},
+// 			},
+// 			VolumeMounts: []corev1.VolumeMount{
+// 				{
+// 					Name:      "mysql-connect-jar",
+// 					MountPath: "/opt/shardingsphere-proxy/ext-lib",
+// 				},
+// 			},
+// 		},
+// 	}
 
-}
+// }
 
-// UpdateDeployment FIXME:merge UpdateDeployment and ConstructCascadingDeployment
-func UpdateDeployment(proxy *v1alpha1.ShardingSphereProxy, act *v1.Deployment) *v1.Deployment {
-	exp := act.DeepCopy()
-
-	if proxy.Spec.AutomaticScaling == nil || !proxy.Spec.AutomaticScaling.Enable {
-		exp.Spec.Replicas = updateReplicas(proxy, act)
-	}
-	exp.Spec.Template = updatePodTemplateSpec(proxy, act)
+func UpdateDeployment(cn *v1alpha1.ComputeNode, cur *v1.Deployment) *v1.Deployment {
+	exp := &v1.Deployment{}
+	exp.ObjectMeta = cur.ObjectMeta
+	exp.Labels = cur.Labels
+	exp.Annotations = cur.Annotations
+	exp.Spec = NewDeployment(cn).Spec
 	return exp
 }
 
+// UpdateDeployment FIXME:merge UpdateDeployment and ConstructCascadingDeployment
+// func UpdateDeployment(proxy *v1alpha1.ShardingSphereProxy, act *v1.Deployment) *v1.Deployment {
+// 	exp := act.DeepCopy()
+
+// 	if proxy.Spec.AutomaticScaling == nil || !proxy.Spec.AutomaticScaling.Enable {
+// 		exp.Spec.Replicas = updateReplicas(proxy, act)
+// 	}
+// 	exp.Spec.Template = updatePodTemplateSpec(proxy, act)
+// 	return exp
+// }
+
+/*
 func updateReplicas(proxy *v1alpha1.ShardingSphereProxy, act *v1.Deployment) *int32 {
 	if *act.Spec.Replicas != proxy.Spec.Replicas {
 		return &proxy.Spec.Replicas
@@ -190,7 +357,7 @@ func updateReplicas(proxy *v1alpha1.ShardingSphereProxy, act *v1.Deployment) *in
 	return act.Spec.Replicas
 }
 
-func updatePodTemplateSpec(proxy *v1alpha1.ShardingSphereProxy, act *v1.Deployment) corev1.PodTemplateSpec {
+func updatePodTemplateSpec(act *v1.Deployment, cnspec *v1alpha1.ComputeNodeSpec) corev1.PodTemplateSpec {
 	exp := act.Spec.Template.DeepCopy()
 
 	SSProxyContainer := updateSSProxyContainer(proxy, act)
@@ -279,3 +446,4 @@ func updateSSProxyContainer(proxy *v1alpha1.ShardingSphereProxy, act *v1.Deploym
 	}
 	return exp
 }
+*/
