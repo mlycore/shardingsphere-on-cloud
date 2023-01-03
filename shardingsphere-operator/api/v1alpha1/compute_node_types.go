@@ -34,6 +34,7 @@ type ComputeNodeList struct {
 
 //+kubebuilder:printcolumn:JSONPath=".status.readyNodes",name=ReadyNodes,type=integer
 //+kubebuilder:printcolumn:JSONPath=".status.phase",name=Phase,type=string
+//+kubebuilder:printcolumn:JSONPath=".metadata.creationTimestamp",name="Age",type="date"
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
 
