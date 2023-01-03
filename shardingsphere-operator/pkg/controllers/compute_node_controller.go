@@ -95,6 +95,7 @@ func (r *ComputeNodeReconciler) reconcileDeployment(ctx context.Context, cn *v1a
 			if err := r.Create(ctx, exp); err != nil {
 				return err
 			}
+			return nil
 		} else {
 			return err
 		}
@@ -120,6 +121,7 @@ func (r *ComputeNodeReconciler) reconcileService(ctx context.Context, cn *v1alph
 			if err := r.Create(ctx, exp); err != nil {
 				return err
 			}
+			return nil
 		} else {
 			return err
 		}
@@ -145,6 +147,7 @@ func (r *ComputeNodeReconciler) reconcileConfigMap(ctx context.Context, cn *v1al
 			if err := r.Create(ctx, exp); err != nil {
 				return err
 			}
+			return nil
 		} else {
 			return err
 		}

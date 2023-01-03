@@ -327,6 +327,7 @@ func addInitContainer(dp *v1.Deployment, mysql *v1alpha1.MySQLDriver) {
 func ComputeNodeUpdateDeployment(cn *v1alpha1.ComputeNode, cur *v1.Deployment) *v1.Deployment {
 	exp := &v1.Deployment{}
 	exp.ObjectMeta = cur.ObjectMeta
+	exp.ObjectMeta.ResourceVersion = ""
 	exp.Labels = cur.Labels
 	exp.Annotations = cur.Annotations
 	exp.Spec = ComputeNodeNewDeployment(cn).Spec

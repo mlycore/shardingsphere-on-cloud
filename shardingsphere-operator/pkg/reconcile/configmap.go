@@ -32,7 +32,10 @@ func ComputeNodeNewConfigMap(cn *v1alpha1.ComputeNode) *v1.ConfigMap {
 	cm.Namespace = cn.Namespace
 	cm.Labels = cn.Labels
 	cn.Spec.LogbackConfig = logback
-	cm.Data["logback.xml"] = logback
+	// cm.Data["logback.xml"] = logback
+	if len(cn.Spec.LogbackConfig) > 0 {
+		cm.Data["logback.xml"] = string(cn.Spec.LogbackConfig)
+	}
 
 	if y, err := yaml.Marshal(cn.Spec.ServerConfig); err == nil {
 		cm.Data["server.yaml"] = string(y)
@@ -59,6 +62,7 @@ func ComputeNodeDefaultConfigMap(meta metav1.Object, gvk schema.GroupVersionKind
 func ComputeNodeUpdateConfigMap(cn *v1alpha1.ComputeNode, cur *v1.ConfigMap) *v1.ConfigMap {
 	exp := &v1.ConfigMap{}
 	exp.ObjectMeta = cur.ObjectMeta
+	exp.ObjectMeta.ResourceVersion = ""
 	exp.Labels = cur.Labels
 	exp.Annotations = cur.Annotations
 	exp.Data = ComputeNodeNewConfigMap(cn).Data
