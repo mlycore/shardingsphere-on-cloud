@@ -20,8 +20,9 @@ package manager
 import (
 	"context"
 	"flag"
-	"github.com/apache/shardingsphere-on-cloud/shardingsphere-operator/pkg/metrics"
 	"os"
+
+	"github.com/apache/shardingsphere-on-cloud/shardingsphere-operator/pkg/metrics"
 
 	"github.com/apache/shardingsphere-on-cloud/shardingsphere-operator/api/v1alpha1"
 	"github.com/apache/shardingsphere-on-cloud/shardingsphere-operator/pkg/controllers"
@@ -83,18 +84,18 @@ func New(opts *Options) *Manager {
 		os.Exit(1)
 	}
 
-	if err = (&controllers.ProxyReconciler{
+	// if err = (&controllers.ClusterReconciler{
+	// 	Client: mgr.GetClient(),
+	// 	Scheme: mgr.GetScheme(),
+	// }).SetupWithManager(mgr); err != nil {
+	// 	setupLog.Error(err, "unable to create controller", "controller", "Cluster")
+	// 	os.Exit(1)
+	// }
+	if err = (&controllers.ComputeNodeReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "ShardingSphereProxy")
-		os.Exit(1)
-	}
-	if err = (&controllers.ProxyConfigReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "ShardingSphereProxyServerConfig")
+		setupLog.Error(err, "unable to create controller", "controller", "ComputeNode")
 		os.Exit(1)
 	}
 	return &Manager{
