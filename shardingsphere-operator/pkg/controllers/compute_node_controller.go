@@ -25,6 +25,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -73,6 +74,10 @@ func (r *ComputeNodeReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	}
 	if err := r.reconcileConfigMap(ctx, cn); err != nil {
 		log.Error(err, "Reconcile ConfigMap Error")
+		errors = append(errors, err)
+	}
+	if err := r.reconcilePodList(ctx, cn); err != nil {
+		log.Error(err, "Reconcile PodList Error")
 		errors = append(errors, err)
 	}
 
@@ -156,6 +161,68 @@ func (r *ComputeNodeReconciler) reconcileConfigMap(ctx context.Context, cn *v1al
 	// update
 	exp := reconcile.ComputeNodeUpdateConfigMap(cn, cur)
 	if err := r.Update(ctx, exp); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (r *ComputeNodeReconciler) reconcilePodList(ctx context.Context, cn *v1alpha1.ComputeNode) error {
+	list := &v1.PodList{}
+	// if err := r.List(ctx, podList, client.InNamespace(namespace), client.MatchingLabels(map[string]string{"apps": name})); err != nil {
+	// 	return ctrl.Result{}, err
+	// }
+
+	cur := &v1alpha1.ComputeNode{}
+	if err := r.Get(ctx, types.NamespacedName{Namespace: cn.Namespace, Name: cn.Name}, cur); err != nil {
+		return err
+	}
+
+	lbs := labels.Set{}
+	lbs = cn.Labels
+	opts := &client.ListOptions{
+		LabelSelector: lbs.AsSelector(),
+	}
+
+	if err := r.List(ctx, list, client.InNamespace(cn.Namespace), opts); err != nil {
+		return err
+	}
+
+	// result := ctrl.Result{}
+	readyNodes := reconcile.CountingReadyPods(list)
+
+	// rt, err := r.getRuntimeShardingSphereProxy(ctx, types.NamespacedName{
+	// 	Namespace: namespace,
+	// 	Name:      name,
+	// })
+	// if err != nil {
+	// 	return ctrl.Result{}, err
+	// }
+	// cur, err := r.Get(ctx, types.NamespacedName{
+	// 	Namespace: namespace,
+	// 	Name: name
+	// })
+	if reconcile.IsRunning(list) {
+		if readyNodes < miniReadyCount {
+			// result.RequeueAfter = WaitingForReady
+			if readyNodes != cur.Status.ReadyNodes {
+				cur.SetPodStarted(readyNodes)
+			}
+		} else {
+			if cur.Status.Phase != v1alpha1.ComputeNodeStatusReady {
+				cur.SetReady(readyNodes)
+			} else if readyNodes != cur.Spec.Replicas {
+				cur.UpdateReadyNodes(readyNodes)
+			}
+		}
+	} else {
+		// TODO: Waiting for pods to start exceeds the maximum number of retries
+		cur.SetPodNotStarted(readyNodes)
+		// result.RequeueAfter = WaitingForReady
+	}
+
+	// TODO: Compare Status with or without modification
+	if err := r.Status().Update(ctx, cur); err != nil {
 		return err
 	}
 
