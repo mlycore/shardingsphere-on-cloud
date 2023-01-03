@@ -23,7 +23,7 @@ import (
 )
 
 // AutomaticScaling HPA configuration
-type AutomaticScaling struct {
+type ComputeNodeAutomaticScaling struct {
 	// +optional
 	Enable bool `json:"enable,omitempty"`
 	// +optional

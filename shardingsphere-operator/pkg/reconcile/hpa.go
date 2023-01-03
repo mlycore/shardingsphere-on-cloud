@@ -17,7 +17,6 @@
 
 package reconcile
 
-/*
 import (
 	"github.com/apache/shardingsphere-on-cloud/shardingsphere-operator/api/v1alpha1"
 	appsv1 "k8s.io/api/apps/v1"
@@ -103,5 +102,3 @@ func UpdateHPA(proxy *v1alpha1.ShardingSphereProxy, act *autoscalingv2beta2.Hori
 	exp := act.DeepCopy()
 	return exp
 }
-
-*/

@@ -18,6 +18,10 @@
 package reconcile
 
 import (
+	"github.com/apache/shardingsphere-on-cloud/shardingsphere-operator/api/v1alpha1"
+	"gopkg.in/yaml.v2"
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
@@ -56,7 +60,6 @@ const logback = `<?xml version="1.0"?>
 </configuration> 
 `
 
-/*
 // ConstructCascadingConfigmap Construct spec resources to Configmap
 func ConstructCascadingConfigmap(proxyConfig *v1alpha1.ShardingSphereProxyServerConfig) *v1.ConfigMap {
 	y := toYaml(proxyConfig)
@@ -80,7 +83,6 @@ func toYaml(proxyConfig *v1alpha1.ShardingSphereProxyServerConfig) string {
 	y, _ := yaml.Marshal(proxyConfig.Spec)
 	return string(y)
 }
-*/
 
 func fromInt32(val int32) intstr.IntOrString {
 	return intstr.IntOrString{Type: intstr.Int, IntVal: val}

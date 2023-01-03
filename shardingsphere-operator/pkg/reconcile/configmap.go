@@ -25,8 +25,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
-func NewConfigMap(cn *v1alpha1.ComputeNode) *v1.ConfigMap {
-	cm := DefaultConfigMap(cn.GetObjectMeta(), cn.GroupVersionKind())
+func ComputeNodeNewConfigMap(cn *v1alpha1.ComputeNode) *v1.ConfigMap {
+	cm := ComputeNodeDefaultConfigMap(cn.GetObjectMeta(), cn.GroupVersionKind())
 
 	cm.Name = cn.Name
 	cm.Namespace = cn.Namespace
@@ -41,7 +41,7 @@ func NewConfigMap(cn *v1alpha1.ComputeNode) *v1.ConfigMap {
 	return cm
 }
 
-func DefaultConfigMap(meta metav1.Object, gvk schema.GroupVersionKind) *v1.ConfigMap {
+func ComputeNodeDefaultConfigMap(meta metav1.Object, gvk schema.GroupVersionKind) *v1.ConfigMap {
 	return &v1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "shardingsphere-proxy",
@@ -56,11 +56,11 @@ func DefaultConfigMap(meta metav1.Object, gvk schema.GroupVersionKind) *v1.Confi
 }
 
 // FIXME: check if changed first, then decide if need to respawn the Pods
-func UpdateConfigMap(cn *v1alpha1.ComputeNode, cur *v1.ConfigMap) *v1.ConfigMap {
+func ComputeNodeUpdateConfigMap(cn *v1alpha1.ComputeNode, cur *v1.ConfigMap) *v1.ConfigMap {
 	exp := &v1.ConfigMap{}
 	exp.ObjectMeta = cur.ObjectMeta
 	exp.Labels = cur.Labels
 	exp.Annotations = cur.Annotations
-	exp.Data = NewConfigMap(cn).Data
+	exp.Data = ComputeNodeNewConfigMap(cn).Data
 	return exp
 }

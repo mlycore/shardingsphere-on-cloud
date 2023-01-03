@@ -18,14 +18,16 @@
 package reconcile
 
 import (
+	"reflect"
+
 	"github.com/apache/shardingsphere-on-cloud/shardingsphere-operator/api/v1alpha1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
-func NewService(cn *v1alpha1.ComputeNode) *v1.Service {
-	svc := DefaultService(cn.GetObjectMeta(), cn.GroupVersionKind())
+func ComputeNodeNewService(cn *v1alpha1.ComputeNode) *v1.Service {
+	svc := ComputeNodeDefaultService(cn.GetObjectMeta(), cn.GroupVersionKind())
 	svc.Name = cn.Name
 	svc.Namespace = cn.Namespace
 	svc.Labels = cn.Labels
@@ -36,7 +38,7 @@ func NewService(cn *v1alpha1.ComputeNode) *v1.Service {
 	return svc
 }
 
-func DefaultService(meta metav1.Object, gvk schema.GroupVersionKind) *v1.Service {
+func ComputeNodeDefaultService(meta metav1.Object, gvk schema.GroupVersionKind) *v1.Service {
 	return &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "shardingsphere-proxy",
@@ -54,18 +56,16 @@ func DefaultService(meta metav1.Object, gvk schema.GroupVersionKind) *v1.Service
 	}
 }
 
-func UpdateService(cn *v1alpha1.ComputeNode, cur *v1.Service) *v1.Service {
+func ComputeNodeUpdateService(cn *v1alpha1.ComputeNode, cur *v1.Service) *v1.Service {
 	exp := &v1.Service{}
 	exp.ObjectMeta = cur.ObjectMeta
 	exp.Labels = cur.Labels
 	exp.Annotations = cur.Annotations
-	exp.Spec = NewService(cn).Spec
+	exp.Spec = ComputeNodeNewService(cn).Spec
 	exp.Spec.ClusterIP = cur.Spec.ClusterIP
 	exp.Spec.ClusterIPs = cur.Spec.ClusterIPs
 	return exp
 }
-
-/*
 
 func NewService(ssproxy *v1alpha1.ShardingSphereProxy) *v1.Service {
 	return ConstructCascadingService(ssproxy)
@@ -115,5 +115,3 @@ func UpdateService(proxy *v1alpha1.ShardingSphereProxy, runtimeService *v1.Servi
 	exp = runtimeService.DeepCopy()
 	return exp
 }
-
-*/

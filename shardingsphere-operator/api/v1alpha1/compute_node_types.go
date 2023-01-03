@@ -52,18 +52,18 @@ const (
 	AllPermitted PrivilegeType = "ALL_PERMITTED"
 )
 
-type Privilege struct {
+type ComputeNodePrivilege struct {
 	Type PrivilegeType `json:"type"`
 }
 
-type User struct {
+type ComputeNodeUser struct {
 	User     string `json:"user"`
 	Password string `json:"password"`
 }
 
-type Authority struct {
-	Privilege Privilege `json:"privilege"`
-	Users     []User    `json:"users"`
+type ComputeNodeAuthority struct {
+	Privilege ComputeNodePrivilege `json:"privilege"`
+	Users     []ComputeNodeUser    `json:"users"`
 }
 
 type RepositoryType string
@@ -100,7 +100,7 @@ type Repository struct {
 // 	ClusterPropsKeyDigest                       = "digest"
 // )
 
-type ClusterProps struct {
+type ComputeNodeClusterProps struct {
 	// Namespace of registry center
 	Namespace string `json:"namespace" yaml:"namespace"`
 	//Server lists of registry center
@@ -130,7 +130,7 @@ const (
 )
 
 // Props Apache ShardingSphere provides the way of property configuration to configure system level configuration.
-type Props struct {
+type ComputeNodeProps struct {
 	// The max thread size of worker group to execute SQL. One ShardingSphereDataSource will use a independent thread pool, it does not share thread pool even different data source in same JVM.
 	// +optional
 	KernelExecutorSize int `json:"kernel-executor-size,omitempty" yaml:"kernel-executor-size,omitempty"`
@@ -155,15 +155,15 @@ type Props struct {
 	ProxyFrontendDatabaseProtocolType string `json:"proxy-frontend-database-protocol-type" yaml:"proxy-frontend-database-protocol-type,omitempty"`
 }
 
-type ServerMode struct {
+type ComputeNodeServerMode struct {
 	Repository Repository `json:"repository"`
 	Type       ModeType   `json:"type"`
 }
 
 type ServerConfig struct {
-	Authority Authority  `json:"authority"`
-	Mode      ServerMode `json:"mode"`
-	Props     *Props     `json:"props"`
+	Authority ComputeNodeAuthority  `json:"authority"`
+	Mode      ComputeNodeServerMode `json:"mode"`
+	Props     *ComputeNodeProps     `json:"props"`
 }
 
 type LogbackConfig string
@@ -244,32 +244,32 @@ type ComputeNodeStatus struct {
 	//There are two possible phase values:
 	//Ready: ShardingSphere-Proxy can already provide external services
 	//NotReady: ShardingSphere-Proxy cannot provide external services
-	Phase PhaseStatus `json:"phase"`
+	Phase ComputeNodePhaseStatus `json:"phase"`
 
 	//Conditions The conditions array, the reason and message fields
-	Conditions Conditions `json:"conditions"`
+	Conditions ComputeNodeConditions `json:"conditions"`
 	//ReadyNodes shows the number of replicas that ShardingSphere-Proxy is running normally
 	ReadyNodes int32 `json:"readyNodes"`
 }
 
-type PhaseStatus string
+type ComputeNodePhaseStatus string
 
 const (
-	StatusReady    PhaseStatus = "Ready"
-	StatusNotReady PhaseStatus = "NotReady"
+	ComputeNodeStatusReady    ComputeNodePhaseStatus = "Ready"
+	ComputeNodeStatusNotReady ComputeNodePhaseStatus = "NotReady"
 )
 
-type ConditionType string
+type ComputeNodeConditionType string
 
 // ConditionType shows some states during the startup process of ShardingSphere-Proxy
 const (
-	ConditionInitialized ConditionType = "Initialized"
-	ConditionStarted     ConditionType = "Started"
-	ConditionReady       ConditionType = "Ready"
-	ConditionUnknown     ConditionType = "Unknown"
+	ComputeNodeConditionInitialized ComputeNodeConditionType = "Initialized"
+	ComputeNodeConditionStarted     ComputeNodeConditionType = "Started"
+	ComputeNodeConditionReady       ComputeNodeConditionType = "Ready"
+	ComputeNodeConditionUnknown     ComputeNodeConditionType = "Unknown"
 )
 
-type Conditions []Condition
+type ComputeNodeConditions []ComputeNodeCondition
 
 // Condition
 // | **condition** | **status** | **directions**|
@@ -280,34 +280,34 @@ type Conditions []Condition
 // | Started       | false      | pod started failed|
 // | Ready         | true       | The pod is ready and can provide external services|
 // | Unknown       | true       | ShardingSphere-Proxy failed to start correctly due to some problems |
-type Condition struct {
-	Type           ConditionType          `json:"type"`
-	Status         corev1.ConditionStatus `json:"status"`
-	LastUpdateTime metav1.Time            `json:"lastUpdateTime,omitempty"`
+type ComputeNodeCondition struct {
+	Type           ComputeNodeConditionType `json:"type"`
+	Status         corev1.ConditionStatus   `json:"status"`
+	LastUpdateTime metav1.Time              `json:"lastUpdateTime,omitempty"`
 }
 
 func (p *ComputeNode) SetInitialized() {
-	p.Status.Phase = StatusNotReady
-	p.Status.Conditions = append([]Condition{}, Condition{
-		Type:           ConditionInitialized,
+	p.Status.Phase = ComputeNodeStatusNotReady
+	p.Status.Conditions = append([]ComputeNodeCondition{}, ComputeNodeCondition{
+		Type:           ComputeNodeConditionInitialized,
 		Status:         corev1.ConditionTrue,
 		LastUpdateTime: metav1.Now(),
 	})
 }
 
 func (p *ComputeNode) SetInitializationFailed() {
-	p.Status.Phase = StatusNotReady
-	p.Status.Conditions = append([]Condition{}, Condition{
-		Type:           ConditionInitialized,
+	p.Status.Phase = ComputeNodeStatusNotReady
+	p.Status.Conditions = append([]ComputeNodeCondition{}, ComputeNodeCondition{
+		Type:           ComputeNodeConditionInitialized,
 		Status:         corev1.ConditionFalse,
 		LastUpdateTime: metav1.Now(),
 	})
 }
 
 func (p *ComputeNode) SetPodStarted(readyNodes int32) {
-	p.Status.Phase = StatusNotReady
-	p.Status.Conditions = append([]Condition{}, Condition{
-		Type:           ConditionStarted,
+	p.Status.Phase = ComputeNodeStatusNotReady
+	p.Status.Conditions = append([]ComputeNodeCondition{}, ComputeNodeCondition{
+		Type:           ComputeNodeConditionStarted,
 		Status:         corev1.ConditionTrue,
 		LastUpdateTime: metav1.Now(),
 	})
@@ -315,9 +315,9 @@ func (p *ComputeNode) SetPodStarted(readyNodes int32) {
 }
 
 func (p *ComputeNode) SetPodNotStarted(readyNodes int32) {
-	p.Status.Phase = StatusNotReady
-	p.Status.Conditions = append([]Condition{}, Condition{
-		Type:           ConditionStarted,
+	p.Status.Phase = ComputeNodeStatusNotReady
+	p.Status.Conditions = append([]ComputeNodeCondition{}, ComputeNodeCondition{
+		Type:           ComputeNodeConditionStarted,
 		Status:         corev1.ConditionFalse,
 		LastUpdateTime: metav1.Now(),
 	})
@@ -325,9 +325,9 @@ func (p *ComputeNode) SetPodNotStarted(readyNodes int32) {
 }
 
 func (p *ComputeNode) SetReady(readyNodes int32) {
-	p.Status.Phase = StatusReady
-	p.Status.Conditions = append([]Condition{}, Condition{
-		Type:           ConditionReady,
+	p.Status.Phase = ComputeNodeStatusReady
+	p.Status.Conditions = append([]ComputeNodeCondition{}, ComputeNodeCondition{
+		Type:           ComputeNodeConditionReady,
 		Status:         corev1.ConditionTrue,
 		LastUpdateTime: metav1.Now(),
 	})
@@ -336,9 +336,9 @@ func (p *ComputeNode) SetReady(readyNodes int32) {
 }
 
 func (p *ComputeNode) SetFailed() {
-	p.Status.Phase = StatusNotReady
-	p.Status.Conditions = append([]Condition{}, Condition{
-		Type:           ConditionUnknown,
+	p.Status.Phase = ComputeNodeStatusNotReady
+	p.Status.Conditions = append([]ComputeNodeCondition{}, ComputeNodeCondition{
+		Type:           ComputeNodeConditionUnknown,
 		Status:         corev1.ConditionTrue,
 		LastUpdateTime: metav1.Now(),
 	})

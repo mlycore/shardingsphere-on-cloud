@@ -17,7 +17,6 @@
 
 package controllers
 
-/*
 import (
 	"context"
 	"time"
@@ -262,5 +261,3 @@ func (r *ProxyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&v1.Pod{}).
 		Complete(r)
 }
-
-*/

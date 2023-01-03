@@ -17,7 +17,6 @@
 
 package v1alpha1
 
-/*
 // User is a slice about authorized host and password for compute node.
 // Format:
 // user:<username>@<hostname>,hostname is % or empty string means do not care about authorized host
@@ -107,4 +106,3 @@ type ClusterConfig struct {
 	// Persist repository configuration
 	Repository RepositoryConfig `json:"repository" yaml:"repository"`
 }
-*/

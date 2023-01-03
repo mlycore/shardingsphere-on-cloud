@@ -19,6 +19,9 @@ package reconcile
 
 import (
 	"fmt"
+	"reflect"
+	"strconv"
+	"strings"
 
 	"github.com/apache/shardingsphere-on-cloud/shardingsphere-operator/api/v1alpha1"
 	v1 "k8s.io/api/apps/v1"
@@ -28,18 +31,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
-// type DeploymentBuilder struct {
-// 	*v1.Deployment
-// }
-
-// func NewDeploymentBuilder() *DeploymentBuilder {
-// 	return &DeploymentBuilder{
-// 		Deployment: DefaultDeployment(),
-// 	}
-// }
-
-func NewDeployment(cn *v1alpha1.ComputeNode) *v1.Deployment {
-	deploy := DefaultDeployment(cn.GetObjectMeta(), cn.GroupVersionKind())
+func ComputeNodeNewDeployment(cn *v1alpha1.ComputeNode) *v1.Deployment {
+	deploy := ComputeNodeDefaultDeployment(cn.GetObjectMeta(), cn.GroupVersionKind())
 
 	// basic information
 	deploy.Name = cn.Name
@@ -120,7 +113,7 @@ func NewDeployment(cn *v1alpha1.ComputeNode) *v1.Deployment {
 	return deploy
 }
 
-func DefaultDeployment(meta metav1.Object, gvk schema.GroupVersionKind) *v1.Deployment {
+func ComputeNodeDefaultDeployment(meta metav1.Object, gvk schema.GroupVersionKind) *v1.Deployment {
 	defaultMaxUnavailable := intstr.FromInt(0)
 	defaultMaxSurge := intstr.FromInt(3)
 	defaultImage := "apache/shardingsphere-proxy:5.3.0"
@@ -187,9 +180,12 @@ func DefaultDeployment(meta metav1.Object, gvk schema.GroupVersionKind) *v1.Depl
 	}
 }
 
-/*
-func ConstructCascadingDeployment(proxy *v1alpha1.ComputeNode) *v1.Deployment {
-	if proxy == nil || reflect.DeepEqual(proxy, &v1alpha1.ComputeNode{}) {
+func NewDeployment(ssproxy *v1alpha1.ShardingSphereProxy) *v1.Deployment {
+	return ConstructCascadingDeployment(ssproxy)
+}
+
+func ConstructCascadingDeployment(proxy *v1alpha1.ShardingSphereProxy) *v1.Deployment {
+	if proxy == nil || reflect.DeepEqual(proxy, &v1alpha1.ShardingSphereProxy{}) {
 		return &v1.Deployment{}
 	}
 
@@ -277,14 +273,13 @@ func ConstructCascadingDeployment(proxy *v1alpha1.ComputeNode) *v1.Deployment {
 	}
 	return processOptionalParameter(proxy, dp)
 }
-*/
 
-// func processOptionalParameter(proxy *v1alpha1.ShardingSphereProxy, dp *v1.Deployment) *v1.Deployment {
-// 	if proxy.Spec.MySQLDriver != nil {
-// 		addInitContainer(dp, proxy.Spec.MySQLDriver)
-// 	}
-// 	return dp
-// }
+func processOptionalParameter(proxy *v1alpha1.ShardingSphereProxy, dp *v1.Deployment) *v1.Deployment {
+	if proxy.Spec.MySQLDriver != nil {
+		addInitContainer(dp, proxy.Spec.MySQLDriver)
+	}
+	return dp
+}
 
 const script = `wget https://repo1.maven.org/maven2/mysql/mysql-connector-java/${MYSQL_CONNECTOR_VERSION}/mysql-connector-java-${MYSQL_CONNECTOR_VERSION}.jar;
 wget https://repo1.maven.org/maven2/mysql/mysql-connector-java/${MYSQL_CONNECTOR_VERSION}/mysql-connector-java-${MYSQL_CONNECTOR_VERSION}.jar.md5;
@@ -292,64 +287,63 @@ if [ $(md5sum /mysql-connector-java-${MYSQL_CONNECTOR_VERSION}.jar | cut -d ' ' 
 then echo success;
 else echo failed;exit 1;fi;mv /mysql-connector-java-${MYSQL_CONNECTOR_VERSION}.jar /opt/shardingsphere-proxy/ext-lib`
 
-// func addInitContainer(dp *v1.Deployment, mysql *v1alpha1.MySQLDriver) {
-// 	if len(dp.Spec.Template.Spec.InitContainers) == 0 {
-// 		dp.Spec.Template.Spec.Containers[0].VolumeMounts = append(dp.Spec.Template.Spec.Containers[0].VolumeMounts, corev1.VolumeMount{
-// 			Name:      "mysql-connect-jar",
-// 			MountPath: "/opt/shardingsphere-proxy/ext-lib",
-// 		})
+func addInitContainer(dp *v1.Deployment, mysql *v1alpha1.MySQLDriver) {
+	if len(dp.Spec.Template.Spec.InitContainers) == 0 {
+		dp.Spec.Template.Spec.Containers[0].VolumeMounts = append(dp.Spec.Template.Spec.Containers[0].VolumeMounts, corev1.VolumeMount{
+			Name:      "mysql-connect-jar",
+			MountPath: "/opt/shardingsphere-proxy/ext-lib",
+		})
 
-// 		dp.Spec.Template.Spec.Volumes = append(dp.Spec.Template.Spec.Volumes, corev1.Volume{
-// 			Name: "mysql-connect-jar",
-// 			VolumeSource: corev1.VolumeSource{
-// 				EmptyDir: &corev1.EmptyDirVolumeSource{},
-// 			},
-// 		})
-// 	}
+		dp.Spec.Template.Spec.Volumes = append(dp.Spec.Template.Spec.Volumes, corev1.Volume{
+			Name: "mysql-connect-jar",
+			VolumeSource: corev1.VolumeSource{
+				EmptyDir: &corev1.EmptyDirVolumeSource{},
+			},
+		})
+	}
 
-// 	dp.Spec.Template.Spec.InitContainers = []corev1.Container{
-// 		{
-// 			Name:    "download-mysql-connect",
-// 			Image:   "busybox:1.35.0",
-// 			Command: []string{"/bin/sh", "-c", script},
-// 			Env: []corev1.EnvVar{
-// 				{
-// 					Name:  "VERSION",
-// 					Value: mysql.Version,
-// 				},
-// 			},
-// 			VolumeMounts: []corev1.VolumeMount{
-// 				{
-// 					Name:      "mysql-connect-jar",
-// 					MountPath: "/opt/shardingsphere-proxy/ext-lib",
-// 				},
-// 			},
-// 		},
-// 	}
+	dp.Spec.Template.Spec.InitContainers = []corev1.Container{
+		{
+			Name:    "download-mysql-connect",
+			Image:   "busybox:1.35.0",
+			Command: []string{"/bin/sh", "-c", script},
+			Env: []corev1.EnvVar{
+				{
+					Name:  "VERSION",
+					Value: mysql.Version,
+				},
+			},
+			VolumeMounts: []corev1.VolumeMount{
+				{
+					Name:      "mysql-connect-jar",
+					MountPath: "/opt/shardingsphere-proxy/ext-lib",
+				},
+			},
+		},
+	}
 
-// }
+}
 
-func UpdateDeployment(cn *v1alpha1.ComputeNode, cur *v1.Deployment) *v1.Deployment {
+func ComputeNodeUpdateDeployment(cn *v1alpha1.ComputeNode, cur *v1.Deployment) *v1.Deployment {
 	exp := &v1.Deployment{}
 	exp.ObjectMeta = cur.ObjectMeta
 	exp.Labels = cur.Labels
 	exp.Annotations = cur.Annotations
-	exp.Spec = NewDeployment(cn).Spec
+	exp.Spec = ComputeNodeNewDeployment(cn).Spec
 	return exp
 }
 
 // UpdateDeployment FIXME:merge UpdateDeployment and ConstructCascadingDeployment
-// func UpdateDeployment(proxy *v1alpha1.ShardingSphereProxy, act *v1.Deployment) *v1.Deployment {
-// 	exp := act.DeepCopy()
+func UpdateDeployment(proxy *v1alpha1.ShardingSphereProxy, act *v1.Deployment) *v1.Deployment {
+	exp := act.DeepCopy()
 
-// 	if proxy.Spec.AutomaticScaling == nil || !proxy.Spec.AutomaticScaling.Enable {
-// 		exp.Spec.Replicas = updateReplicas(proxy, act)
-// 	}
-// 	exp.Spec.Template = updatePodTemplateSpec(proxy, act)
-// 	return exp
-// }
+	if proxy.Spec.AutomaticScaling == nil || !proxy.Spec.AutomaticScaling.Enable {
+		exp.Spec.Replicas = updateReplicas(proxy, act)
+	}
+	exp.Spec.Template = updatePodTemplateSpec(proxy, act)
+	return exp
+}
 
-/*
 func updateReplicas(proxy *v1alpha1.ShardingSphereProxy, act *v1.Deployment) *int32 {
 	if *act.Spec.Replicas != proxy.Spec.Replicas {
 		return &proxy.Spec.Replicas
@@ -357,7 +351,7 @@ func updateReplicas(proxy *v1alpha1.ShardingSphereProxy, act *v1.Deployment) *in
 	return act.Spec.Replicas
 }
 
-func updatePodTemplateSpec(act *v1.Deployment, cnspec *v1alpha1.ComputeNodeSpec) corev1.PodTemplateSpec {
+func updatePodTemplateSpec(proxy *v1alpha1.ShardingSphereProxy, act *v1.Deployment) corev1.PodTemplateSpec {
 	exp := act.Spec.Template.DeepCopy()
 
 	SSProxyContainer := updateSSProxyContainer(proxy, act)
@@ -446,4 +440,3 @@ func updateSSProxyContainer(proxy *v1alpha1.ShardingSphereProxy, act *v1.Deploym
 	}
 	return exp
 }
-*/

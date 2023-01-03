@@ -91,7 +91,7 @@ func (r *ComputeNodeReconciler) reconcileDeployment(ctx context.Context, cn *v1a
 	}, cur); err != nil {
 		if apierrors.IsNotFound(err) {
 			// create
-			exp := reconcile.NewDeployment(cn)
+			exp := reconcile.ComputeNodeNewDeployment(cn)
 			if err := r.Create(ctx, exp); err != nil {
 				return err
 			}
@@ -100,7 +100,7 @@ func (r *ComputeNodeReconciler) reconcileDeployment(ctx context.Context, cn *v1a
 		}
 	}
 	// update
-	exp := reconcile.UpdateDeployment(cn, cur)
+	exp := reconcile.ComputeNodeUpdateDeployment(cn, cur)
 	if err := r.Update(ctx, exp); err != nil {
 		return err
 	}
@@ -116,7 +116,7 @@ func (r *ComputeNodeReconciler) reconcileService(ctx context.Context, cn *v1alph
 	}, cur); err != nil {
 		if apierrors.IsNotFound(err) {
 			// create
-			exp := reconcile.NewService(cn)
+			exp := reconcile.ComputeNodeNewService(cn)
 			if err := r.Create(ctx, exp); err != nil {
 				return err
 			}
@@ -125,7 +125,7 @@ func (r *ComputeNodeReconciler) reconcileService(ctx context.Context, cn *v1alph
 		}
 	}
 	// update
-	exp := reconcile.UpdateService(cn, cur)
+	exp := reconcile.ComputeNodeUpdateService(cn, cur)
 	if err := r.Update(ctx, exp); err != nil {
 		return err
 	}
@@ -141,7 +141,7 @@ func (r *ComputeNodeReconciler) reconcileConfigMap(ctx context.Context, cn *v1al
 	}, cur); err != nil {
 		if apierrors.IsNotFound(err) {
 			// create
-			exp := reconcile.NewConfigMap(cn)
+			exp := reconcile.ComputeNodeNewConfigMap(cn)
 			if err := r.Create(ctx, exp); err != nil {
 				return err
 			}
@@ -151,7 +151,7 @@ func (r *ComputeNodeReconciler) reconcileConfigMap(ctx context.Context, cn *v1al
 	}
 
 	// update
-	exp := reconcile.UpdateConfigMap(cn, cur)
+	exp := reconcile.ComputeNodeUpdateConfigMap(cn, cur)
 	if err := r.Update(ctx, exp); err != nil {
 		return err
 	}
