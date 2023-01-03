@@ -163,7 +163,8 @@ type ComputeNodeServerMode struct {
 type ServerConfig struct {
 	Authority ComputeNodeAuthority  `json:"authority"`
 	Mode      ComputeNodeServerMode `json:"mode"`
-	Props     *ComputeNodeProps     `json:"props"`
+	//+optional
+	Props *ComputeNodeProps `json:"props"`
 }
 
 type LogbackConfig string
@@ -227,8 +228,8 @@ type ComputeNodeSpec struct {
 	// +optional
 	ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
 
-	//Port is ShardingSphere-Proxy startup port
 	// +optional
+	// Port is ShardingSphere-Proxy startup port
 	Ports []corev1.ContainerPort `json:"ports"`
 
 	// +optional
