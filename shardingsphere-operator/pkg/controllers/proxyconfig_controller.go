@@ -17,6 +17,7 @@
 
 package controllers
 
+/*
 import (
 	"context"
 
@@ -117,3 +118,5 @@ func (r *ProxyConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&v1.ConfigMap{}).
 		Complete(r)
 }
+
+*/
