@@ -161,6 +161,7 @@ func (r *ComputeNodeReconciler) reconcileConfigMap(ctx context.Context, cn *v1al
 	}
 
 	// update
+	//FIXME: need to rolling update Deployment if ConfigMap indeed updated
 	exp := reconcile.ComputeNodeUpdateConfigMap(cn, cur)
 	if err := r.Update(ctx, exp); err != nil {
 		return err
