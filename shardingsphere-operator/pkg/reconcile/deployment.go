@@ -67,46 +67,48 @@ func ComputeNodeNewDeployment(cn *v1alpha1.ComputeNode) *v1.Deployment {
 	if len(cn.Spec.ImagePullSecrets) > 0 {
 		deploy.Spec.Template.Spec.ImagePullSecrets = cn.Spec.ImagePullSecrets
 	}
-	if cn.Spec.Connector.Type == v1alpha1.ConnectorTypeMySQL {
-		// add or update initContainer
-		if len(deploy.Spec.Template.Spec.InitContainers) > 0 {
-			for idx, v := range deploy.Spec.Template.Spec.InitContainers[0].Env {
-				if v.Name == "MYSQL_CONNECTOR_VERSION" {
-					deploy.Spec.Template.Spec.Containers[0].Env[idx].Value = cn.Spec.Connector.Version
+	if cn.Spec.Connector != nil {
+		if cn.Spec.Connector.Type == v1alpha1.ConnectorTypeMySQL {
+			// add or update initContainer
+			if len(deploy.Spec.Template.Spec.InitContainers) > 0 {
+				for idx, v := range deploy.Spec.Template.Spec.InitContainers[0].Env {
+					if v.Name == "MYSQL_CONNECTOR_VERSION" {
+						deploy.Spec.Template.Spec.InitContainers[0].Env[idx].Value = cn.Spec.Connector.Version
+					}
 				}
-			}
-		} else {
-			deploy.Spec.Template.Spec.InitContainers = []corev1.Container{
-				{
-					Name:    "download-mysql-connect",
-					Image:   "busybox:1.35.0",
-					Command: []string{"/bin/sh", "-c", script},
-					Env: []corev1.EnvVar{
-						{
-							Name:  "MYSQL_CONNECTOR_VERSION",
-							Value: "5.1.47",
+			} else {
+				deploy.Spec.Template.Spec.InitContainers = []corev1.Container{
+					{
+						Name:    "download-mysql-connect",
+						Image:   "busybox:1.35.0",
+						Command: []string{"/bin/sh", "-c", script},
+						Env: []corev1.EnvVar{
+							{
+								Name:  "MYSQL_CONNECTOR_VERSION",
+								Value: cn.Spec.Connector.Version,
+							},
+						},
+						VolumeMounts: []corev1.VolumeMount{
+							{
+								Name:      "connectors",
+								MountPath: "/opt/shardingsphere-proxy/ext-lib",
+							},
 						},
 					},
-					VolumeMounts: []corev1.VolumeMount{
-						{
-							Name:      "connectors",
-							MountPath: "/opt/shardingsphere-proxy/ext-lib",
-						},
+				}
+
+				deploy.Spec.Template.Spec.Containers[0].VolumeMounts = append(deploy.Spec.Template.Spec.Containers[0].VolumeMounts, corev1.VolumeMount{
+					Name:      "connectors",
+					MountPath: "/opt/shardingsphere-proxy/ext-lib",
+				})
+
+				deploy.Spec.Template.Spec.Volumes = append(deploy.Spec.Template.Spec.Volumes, corev1.Volume{
+					Name: "connectors",
+					VolumeSource: corev1.VolumeSource{
+						EmptyDir: &corev1.EmptyDirVolumeSource{},
 					},
-				},
+				})
 			}
-
-			deploy.Spec.Template.Spec.Containers[0].VolumeMounts = append(deploy.Spec.Template.Spec.Containers[0].VolumeMounts, corev1.VolumeMount{
-				Name:      "connectors",
-				MountPath: "/opt/shardingsphere-proxy/ext-lib",
-			})
-
-			deploy.Spec.Template.Spec.Volumes = append(deploy.Spec.Template.Spec.Volumes, corev1.Volume{
-				Name: "connectors",
-				VolumeSource: corev1.VolumeSource{
-					EmptyDir: &corev1.EmptyDirVolumeSource{},
-				},
-			})
 		}
 	}
 
