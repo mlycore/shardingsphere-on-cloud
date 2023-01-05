@@ -19,12 +19,14 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/apache/shardingsphere-on-cloud/shardingsphere-operator/api/v1alpha1"
 	"github.com/apache/shardingsphere-on-cloud/shardingsphere-operator/pkg/reconcile"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -169,10 +171,6 @@ func (r *ComputeNodeReconciler) reconcileConfigMap(ctx context.Context, cn *v1al
 
 func (r *ComputeNodeReconciler) reconcilePodList(ctx context.Context, cn *v1alpha1.ComputeNode) error {
 	list := &v1.PodList{}
-	// if err := r.List(ctx, podList, client.InNamespace(namespace), client.MatchingLabels(map[string]string{"apps": name})); err != nil {
-	// 	return ctrl.Result{}, err
-	// }
-
 	cur := &v1alpha1.ComputeNode{}
 	if err := r.Get(ctx, types.NamespacedName{Namespace: cn.Namespace, Name: cn.Name}, cur); err != nil {
 		return err
@@ -183,46 +181,51 @@ func (r *ComputeNodeReconciler) reconcilePodList(ctx context.Context, cn *v1alph
 	opts := &client.ListOptions{
 		LabelSelector: lbs.AsSelector(),
 	}
-
 	if err := r.List(ctx, list, client.InNamespace(cn.Namespace), opts); err != nil {
 		return err
 	}
 
-	// result := ctrl.Result{}
+	// the number of ready Pods
 	readyNodes := reconcile.CountingReadyPods(list)
 
-	// rt, err := r.getRuntimeShardingSphereProxy(ctx, types.NamespacedName{
-	// 	Namespace: namespace,
-	// 	Name:      name,
-	// })
-	// if err != nil {
-	// 	return ctrl.Result{}, err
-	// }
-	// cur, err := r.Get(ctx, types.NamespacedName{
-	// 	Namespace: namespace,
-	// 	Name: name
-	// })
-	if reconcile.IsRunning(list) {
-		if readyNodes < miniReadyCount {
-			// result.RequeueAfter = WaitingForReady
-			if readyNodes != cur.Status.ReadyNodes {
-				cur.SetPodStarted(readyNodes)
+	// status not running, need reconcile
+	if readyNodes != cur.Spec.Replicas {
+		// check status
+		if cur.Status.Phase != v1alpha1.ComputeNodeStatusNotReady {
+			cur.Status.Phase = v1alpha1.ComputeNodeStatusNotReady
+			// check condition
+			if readyNodes < miniReadyCount {
+				// initialization
+				cur.Status.Conditions = append([]v1alpha1.ComputeNodeCondition{}, v1alpha1.ComputeNodeCondition{
+					Type:           v1alpha1.ComputeNodeConditionInitialized,
+					Status:         v1.ConditionTrue,
+					LastUpdateTime: metav1.Now(),
+				})
+			} else {
+				cur.Status.Conditions = append([]v1alpha1.ComputeNodeCondition{}, v1alpha1.ComputeNodeCondition{
+					Type:           v1alpha1.ComputeNodeConditionStarted,
+					Status:         v1.ConditionTrue,
+					LastUpdateTime: metav1.Now(),
+				})
 			}
-		} else {
-			if cur.Status.Phase != v1alpha1.ComputeNodeStatusReady {
-				cur.SetReady(readyNodes)
-			} else if readyNodes != cur.Spec.Replicas {
-				cur.UpdateReadyNodes(readyNodes)
-			}
+			//FIXME: how about status false and unknown?
 		}
 	} else {
-		// TODO: Waiting for pods to start exceeds the maximum number of retries
-		cur.SetPodNotStarted(readyNodes)
-		// result.RequeueAfter = WaitingForReady
+		// status running
+		if cur.Status.Phase != v1alpha1.ComputeNodeStatusReady {
+			cur.Status.Phase = v1alpha1.ComputeNodeStatusReady
+			cur.Status.Conditions = append([]v1alpha1.ComputeNodeCondition{}, v1alpha1.ComputeNodeCondition{
+				Type:           v1alpha1.ComputeNodeConditionReady,
+				Status:         v1.ConditionTrue,
+				LastUpdateTime: metav1.Now(),
+			})
+		}
 	}
+	cur.Status.ReadyNodes = readyNodes
 
 	// TODO: Compare Status with or without modification
 	if err := r.Status().Update(ctx, cur); err != nil {
+		fmt.Printf("update status error: %+v\n", err)
 		return err
 	}
 
