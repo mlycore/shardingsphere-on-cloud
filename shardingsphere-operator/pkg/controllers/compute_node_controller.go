@@ -19,6 +19,7 @@ package controllers
 
 import (
 	"context"
+	"time"
 
 	"github.com/apache/shardingsphere-on-cloud/shardingsphere-operator/api/v1alpha1"
 	"github.com/apache/shardingsphere-on-cloud/shardingsphere-operator/pkg/reconcile"
@@ -33,7 +34,7 @@ import (
 	logger "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-const defaultRequeueTime = 10
+const defaultRequeueTime = 10 * time.Second
 
 type ComputeNodeReconciler struct {
 	client.Client
@@ -45,6 +46,7 @@ func (r *ComputeNodeReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v1alpha1.ComputeNode{}).
 		Owns(&appsv1.Deployment{}).
+		Owns(&v1.Pod{}).
 		Owns(&v1.Service{}).
 		Owns(&v1.ConfigMap{}).
 		Complete(r)
@@ -76,7 +78,7 @@ func (r *ComputeNodeReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		log.Error(err, "Reconcile ConfigMap Error")
 		errors = append(errors, err)
 	}
-	if err := r.reconcilePodlist(ctx, cn.Namespace, cn.Name); err != nil {
+	if err := r.reconcilePodlist(ctx, cn.Namespace, cn.Name, cn.Labels); err != nil {
 		log.Error(err, "Reconcile PodList Error")
 		errors = append(errors, err)
 	}
@@ -168,9 +170,9 @@ func (r *ComputeNodeReconciler) reconcileConfigMap(ctx context.Context, cn *v1al
 	return nil
 }
 
-func (r *ComputeNodeReconciler) reconcilePodlist(ctx context.Context, namespace, name string) error {
+func (r *ComputeNodeReconciler) reconcilePodlist(ctx context.Context, namespace, name string, labels map[string]string) error {
 	podList := &v1.PodList{}
-	if err := r.List(ctx, podList, client.InNamespace(namespace), client.MatchingLabels(map[string]string{"apps": name})); err != nil {
+	if err := r.List(ctx, podList, client.InNamespace(namespace), client.MatchingLabels(labels)); err != nil {
 		return err
 	}
 
@@ -199,7 +201,7 @@ func getReadyNodes(podlist v1.PodList) int32 {
 			for _, c := range p.Status.Conditions {
 				if c.Type == v1.PodReady && c.Status == v1.ConditionTrue {
 					for _, con := range p.Status.ContainerStatuses {
-						if con.Name == "proxy" && con.Ready {
+						if con.Name == "shardingsphere-proxy" && con.Ready {
 							cnt++
 						}
 					}
@@ -328,68 +330,3 @@ func (r *ComputeNodeReconciler) getRuntimeComputeNode(ctx context.Context, names
 	err := r.Get(ctx, namespacedName, rt)
 	return rt, err
 }
-
-/*
-func (r *ComputeNodeReconciler) reconcilePodList(ctx context.Context, cn *v1alpha1.ComputeNode) error {
-	list := &v1.PodList{}
-	cur := &v1alpha1.ComputeNode{}
-	if err := r.Get(ctx, types.NamespacedName{Namespace: cn.Namespace, Name: cn.Name}, cur); err != nil {
-		return err
-	}
-
-	lbs := labels.Set{}
-	lbs = cn.Labels
-	opts := &client.ListOptions{
-		LabelSelector: lbs.AsSelector(),
-	}
-	if err := r.List(ctx, list, client.InNamespace(cn.Namespace), opts); err != nil {
-		return err
-	}
-
-	// the number of ready Pods
-	readyNodes := reconcile.CountingReadyPods(list)
-
-	// status not running, need reconcile
-	if readyNodes != cur.Spec.Replicas {
-		// check status
-		if cur.Status.Phase != v1alpha1.ComputeNodeStatusNotReady {
-			cur.Status.Phase = v1alpha1.ComputeNodeStatusNotReady
-			// check condition
-			if readyNodes < miniReadyCount {
-				// initialization
-				cur.Status.Conditions = append([]v1alpha1.ComputeNodeCondition{}, v1alpha1.ComputeNodeCondition{
-					Type:           v1alpha1.ComputeNodeConditionInitialized,
-					Status:         v1.ConditionTrue,
-					LastUpdateTime: metav1.Now(),
-				})
-			} else {
-				cur.Status.Conditions = append([]v1alpha1.ComputeNodeCondition{}, v1alpha1.ComputeNodeCondition{
-					Type:           v1alpha1.ComputeNodeConditionStarted,
-					Status:         v1.ConditionTrue,
-					LastUpdateTime: metav1.Now(),
-				})
-			}
-			//FIXME: how about status false and unknown?
-		}
-	} else {
-		// status running
-		if cur.Status.Phase != v1alpha1.ComputeNodeStatusReady {
-			cur.Status.Phase = v1alpha1.ComputeNodeStatusReady
-			cur.Status.Conditions = append([]v1alpha1.ComputeNodeCondition{}, v1alpha1.ComputeNodeCondition{
-				Type:           v1alpha1.ComputeNodeConditionReady,
-				Status:         v1.ConditionTrue,
-				LastUpdateTime: metav1.Now(),
-			})
-		}
-	}
-	cur.Status.ReadyInstances = readyNodes
-
-	// TODO: Compare Status with or without modification
-	if err := r.Status().Update(ctx, cur); err != nil {
-		fmt.Printf("update status error: %+v\n", err)
-		return err
-	}
-
-	return nil
-}
-*/
