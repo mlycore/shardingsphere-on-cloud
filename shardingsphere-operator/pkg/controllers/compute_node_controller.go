@@ -19,7 +19,6 @@ package controllers
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/apache/shardingsphere-on-cloud/shardingsphere-operator/api/v1alpha1"
 	"github.com/apache/shardingsphere-on-cloud/shardingsphere-operator/pkg/reconcile"
@@ -27,7 +26,6 @@ import (
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -78,7 +76,7 @@ func (r *ComputeNodeReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		log.Error(err, "Reconcile ConfigMap Error")
 		errors = append(errors, err)
 	}
-	if err := r.reconcilePodList(ctx, cn); err != nil {
+	if err := r.reconcilePodlist(ctx, cn.Namespace, cn.Name); err != nil {
 		log.Error(err, "Reconcile PodList Error")
 		errors = append(errors, err)
 	}
@@ -170,6 +168,168 @@ func (r *ComputeNodeReconciler) reconcileConfigMap(ctx context.Context, cn *v1al
 	return nil
 }
 
+func (r *ComputeNodeReconciler) reconcilePodlist(ctx context.Context, namespace, name string) error {
+	podList := &v1.PodList{}
+	if err := r.List(ctx, podList, client.InNamespace(namespace), client.MatchingLabels(map[string]string{"apps": name})); err != nil {
+		return err
+	}
+
+	rt, err := r.getRuntimeComputeNode(ctx, types.NamespacedName{
+		Namespace: namespace,
+		Name:      name,
+	})
+	if err != nil {
+		return err
+	}
+
+	rt.Status = ReconcileComputeNodeStatus(*podList, *rt)
+
+	// TODO: Compare Status with or without modification
+	if err := r.Status().Update(ctx, rt); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func getReadyNodes(podlist v1.PodList) int32 {
+	var cnt int32
+	for _, p := range podlist.Items {
+		if p.Status.Phase == v1.PodRunning {
+			for _, c := range p.Status.Conditions {
+				if c.Type == v1.PodReady && c.Status == v1.ConditionTrue {
+					for _, con := range p.Status.ContainerStatuses {
+						if con.Name == "proxy" && con.Ready {
+							cnt++
+						}
+					}
+				}
+			}
+		}
+	}
+	return cnt
+}
+
+func newConditions(conditions []v1alpha1.ComputeNodeCondition, cond v1alpha1.ComputeNodeCondition) []v1alpha1.ComputeNodeCondition {
+	if conditions == nil {
+		conditions = []v1alpha1.ComputeNodeCondition{}
+	}
+	if cond.Type == "" {
+		return conditions
+	}
+
+	found := false
+	for idx, _ := range conditions {
+		if conditions[idx].Type == cond.Type {
+			conditions[idx].LastUpdateTime = cond.LastUpdateTime
+			conditions[idx].Status = cond.Status
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		conditions = append(conditions, cond)
+	}
+
+	return conditions
+}
+
+func updateReadyConditions(conditions []v1alpha1.ComputeNodeCondition, cond v1alpha1.ComputeNodeCondition) []v1alpha1.ComputeNodeCondition {
+	return newConditions(conditions, cond)
+}
+
+func updateNotReadyConditions(conditions []v1alpha1.ComputeNodeCondition, cond v1alpha1.ComputeNodeCondition) []v1alpha1.ComputeNodeCondition {
+	cur := newConditions(conditions, cond)
+
+	for idx, _ := range cur {
+		if cur[idx].Type == v1alpha1.ComputeNodeConditionReady {
+			cur[idx].LastUpdateTime = metav1.Now()
+			cur[idx].Status = v1.ConditionFalse
+		}
+	}
+
+	return cur
+}
+
+func clusterCondition(podlist v1.PodList) v1alpha1.ComputeNodeCondition {
+	cond := v1alpha1.ComputeNodeCondition{}
+	if len(podlist.Items) == 0 {
+		return cond
+	}
+
+	condStarted := v1alpha1.ComputeNodeCondition{
+		Type:           v1alpha1.ComputeNodeConditionStarted,
+		Status:         v1.ConditionTrue,
+		LastUpdateTime: metav1.Now(),
+	}
+	condUnknown := v1alpha1.ComputeNodeCondition{
+		Type:           v1alpha1.ComputeNodeConditionUnknown,
+		Status:         v1.ConditionTrue,
+		LastUpdateTime: metav1.Now(),
+	}
+	condDeployed := v1alpha1.ComputeNodeCondition{
+		Type:           v1alpha1.ComputeNodeConditionDeployed,
+		Status:         v1.ConditionTrue,
+		LastUpdateTime: metav1.Now(),
+	}
+	condFailed := v1alpha1.ComputeNodeCondition{
+		Type:           v1alpha1.ComputeNodeConditionFailed,
+		Status:         v1.ConditionTrue,
+		LastUpdateTime: metav1.Now(),
+	}
+
+	//FIXME: do not capture ConditionStarted in some cases
+	for _, p := range podlist.Items {
+		switch p.Status.Phase {
+		case v1.PodRunning:
+			return condStarted
+		case v1.PodUnknown:
+			return condUnknown
+		case v1.PodPending:
+			return condDeployed
+		case v1.PodFailed:
+			return condFailed
+		}
+	}
+	return cond
+}
+
+func ReconcileComputeNodeStatus(podlist v1.PodList, rt v1alpha1.ComputeNode) v1alpha1.ComputeNodeStatus {
+	readyNodes := getReadyNodes(podlist)
+
+	rt.Status.ReadyInstances = readyNodes
+	if rt.Spec.Replicas == 0 {
+		rt.Status.Phase = v1alpha1.ComputeNodeStatusNotReady
+	} else {
+		if readyNodes < miniReadyCount {
+			rt.Status.Phase = v1alpha1.ComputeNodeStatusNotReady
+		} else {
+			rt.Status.Phase = v1alpha1.ComputeNodeStatusReady
+		}
+	}
+
+	if rt.Status.Phase == v1alpha1.ComputeNodeStatusReady {
+		rt.Status.Conditions = updateReadyConditions(rt.Status.Conditions, v1alpha1.ComputeNodeCondition{
+			Type:           v1alpha1.ComputeNodeConditionReady,
+			Status:         v1.ConditionTrue,
+			LastUpdateTime: metav1.Now(),
+		})
+	} else {
+		cond := clusterCondition(podlist)
+		rt.Status.Conditions = updateNotReadyConditions(rt.Status.Conditions, cond)
+	}
+
+	return rt.Status
+}
+
+func (r *ComputeNodeReconciler) getRuntimeComputeNode(ctx context.Context, namespacedName types.NamespacedName) (*v1alpha1.ComputeNode, error) {
+	rt := &v1alpha1.ComputeNode{}
+	err := r.Get(ctx, namespacedName, rt)
+	return rt, err
+}
+
+/*
 func (r *ComputeNodeReconciler) reconcilePodList(ctx context.Context, cn *v1alpha1.ComputeNode) error {
 	list := &v1.PodList{}
 	cur := &v1alpha1.ComputeNode{}
@@ -232,3 +392,4 @@ func (r *ComputeNodeReconciler) reconcilePodList(ctx context.Context, cn *v1alph
 
 	return nil
 }
+*/

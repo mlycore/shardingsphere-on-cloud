@@ -269,6 +269,8 @@ const (
 	ComputeNodeConditionStarted     ComputeNodeConditionType = "Started"
 	ComputeNodeConditionReady       ComputeNodeConditionType = "Ready"
 	ComputeNodeConditionUnknown     ComputeNodeConditionType = "Unknown"
+	ComputeNodeConditionDeployed    ComputeNodeConditionType = "Deployed"
+	ComputeNodeConditionFailed      ComputeNodeConditionType = "Failed"
 )
 
 type ComputeNodeConditions []ComputeNodeCondition
