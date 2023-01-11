@@ -78,7 +78,7 @@ func ComputeNodeNewDeployment(cn *v1alpha1.ComputeNode) *v1.Deployment {
 					{
 						Name:    "download-mysql-connect",
 						Image:   "busybox:1.35.0",
-						Command: []string{"/bin/sh", "-c", script},
+						Command: []string{"/bin/sh", "-c", download_script},
 						Env: []corev1.EnvVar{
 							{
 								Name:  "MYSQL_CONNECTOR_VERSION",
@@ -111,6 +111,12 @@ func ComputeNodeNewDeployment(cn *v1alpha1.ComputeNode) *v1.Deployment {
 
 	return deploy
 }
+
+const download_script = `wget https://repo1.maven.org/maven2/mysql/mysql-connector-java/${MYSQL_CONNECTOR_VERSION}/mysql-connector-java-${MYSQL_CONNECTOR_VERSION}.jar;
+wget https://repo1.maven.org/maven2/mysql/mysql-connector-java/${MYSQL_CONNECTOR_VERSION}/mysql-connector-java-${MYSQL_CONNECTOR_VERSION}.jar.md5;
+if [ $(md5sum /mysql-connector-java-${MYSQL_CONNECTOR_VERSION}.jar | cut -d ' ' -f1) = $(cat /mysql-connector-java-${MYSQL_CONNECTOR_VERSION}.jar.md5) ];
+then echo success;
+else echo failed;exit 1;fi;mv /mysql-connector-java-${MYSQL_CONNECTOR_VERSION}.jar /opt/shardingsphere-proxy/ext-lib`
 
 func ComputeNodeDefaultDeployment(meta metav1.Object, gvk schema.GroupVersionKind) *v1.Deployment {
 	defaultMaxUnavailable := intstr.FromInt(0)
