@@ -251,7 +251,7 @@ type ComputeNodeStatus struct {
 	//Conditions The conditions array, the reason and message fields
 	Conditions ComputeNodeConditions `json:"conditions"`
 	//ReadyNodes shows the number of replicas that ShardingSphere-Proxy is running normally
-	ReadyNodes int32 `json:"readyNodes"`
+	ReadyInstances int32 `json:"readyInstances"`
 }
 
 type ComputeNodePhaseStatus string
