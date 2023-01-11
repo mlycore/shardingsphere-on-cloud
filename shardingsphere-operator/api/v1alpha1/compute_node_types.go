@@ -32,7 +32,7 @@ type ComputeNodeList struct {
 	Items           []ComputeNode `json:"items"`
 }
 
-//+kubebuilder:printcolumn:JSONPath=".status.readyNodes",name=ReadyNodes,type=integer
+//+kubebuilder:printcolumn:JSONPath=".status.readyInstances",name=ReadyInstances,type=integer
 //+kubebuilder:printcolumn:JSONPath=".status.phase",name=Phase,type=string
 //+kubebuilder:printcolumn:JSONPath=".metadata.creationTimestamp",name="Age",type="date"
 //+kubebuilder:object:root=true
@@ -43,7 +43,8 @@ type ComputeNode struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   ComputeNodeSpec   `json:"spec,omitempty"`
+	Spec ComputeNodeSpec `json:"spec,omitempty"`
+	// +optional
 	Status ComputeNodeStatus `json:"status,omitempty"`
 }
 
@@ -246,11 +247,14 @@ type ComputeNodeStatus struct {
 	//There are two possible phase values:
 	//Ready: ShardingSphere-Proxy can already provide external services
 	//NotReady: ShardingSphere-Proxy cannot provide external services
+	// +optional
 	Phase ComputeNodePhaseStatus `json:"phase"`
 
 	//Conditions The conditions array, the reason and message fields
+	// +optional
 	Conditions ComputeNodeConditions `json:"conditions"`
 	//ReadyNodes shows the number of replicas that ShardingSphere-Proxy is running normally
+	// +optional
 	ReadyInstances int32 `json:"readyInstances"`
 }
 
