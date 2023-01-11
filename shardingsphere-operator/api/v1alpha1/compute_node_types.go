@@ -206,11 +206,16 @@ type Connector struct {
 	Version string `json:"version"`
 }
 
-// ProxySpec defines the desired state of ShardingSphereProxy
-type ComputeNodeSpec struct {
+type BootstrapConfig struct {
+	// +optional
 	ServerConfig ServerConfig `json:"serverConfig,omitempty"`
 	// +optional
 	LogbackConfig LogbackConfig `json:"logbackConfig,omitempty"`
+}
+
+// ProxySpec defines the desired state of ShardingSphereProxy
+type ComputeNodeSpec struct {
+	Bootstrap BootstrapConfig `json:"bootstrap,omitempty"`
 
 	// AutomaticScaling *AutomaticScaling `json:"automaticScaling,omitempty"`
 	//Replicas is the expected number of replicas of ShardingSphere-Proxy
@@ -280,14 +285,13 @@ const (
 type ComputeNodeConditions []ComputeNodeCondition
 
 // Condition
-// | **condition** | **status** | **directions**|
+// | **phase** | **condition**  | **descriptions**|
 // | ------------- | ---------- | ---------------------------------------------------- |
-// | Initialized   | true       | Initialization successful|
-// | Initialized   | false      | initialization failed|
-// | Started       | true       | pod started successfully but not ready|
-// | Started       | false      | pod started failed|
-// | Ready         | true       | The pod is ready and can provide external services|
-// | Unknown       | true       | ShardingSphere-Proxy failed to start correctly due to some problems |
+// | NotReady      | Deployed   | pods are deployed but are not created or currently pending|
+// | NotReady      | Started    | pods are started but not satisfy ready requirements|
+// | Ready         | Ready      | minimum pods satisfy ready requirements|
+// | NotReady      | Unknown    | can not locate the status of pods |
+// | NotReady      | Failed     | ShardingSphere-Proxy failed to start correctly due to some problems|
 type ComputeNodeCondition struct {
 	Type           ComputeNodeConditionType `json:"type"`
 	Status         corev1.ConditionStatus   `json:"status"`

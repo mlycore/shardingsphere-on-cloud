@@ -31,13 +31,12 @@ func ComputeNodeNewConfigMap(cn *v1alpha1.ComputeNode) *v1.ConfigMap {
 	cm.Name = cn.Name
 	cm.Namespace = cn.Namespace
 	cm.Labels = cn.Labels
-	cn.Spec.LogbackConfig = logback
-	// cm.Data["logback.xml"] = logback
-	if len(cn.Spec.LogbackConfig) > 0 {
-		cm.Data["logback.xml"] = string(cn.Spec.LogbackConfig)
+	cn.Spec.Bootstrap.LogbackConfig = logback
+	if len(cn.Spec.Bootstrap.LogbackConfig) > 0 {
+		cm.Data["logback.xml"] = string(cn.Spec.Bootstrap.LogbackConfig)
 	}
 
-	if y, err := yaml.Marshal(cn.Spec.ServerConfig); err == nil {
+	if y, err := yaml.Marshal(cn.Spec.Bootstrap.ServerConfig); err == nil {
 		cm.Data["server.yaml"] = string(y)
 	}
 
