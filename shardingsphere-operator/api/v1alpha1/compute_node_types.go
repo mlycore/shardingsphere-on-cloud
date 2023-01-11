@@ -313,7 +313,7 @@ func (p *ComputeNode) SetPodStarted(readyNodes int32) {
 		Status:         corev1.ConditionTrue,
 		LastUpdateTime: metav1.Now(),
 	})
-	p.Status.ReadyNodes = readyNodes
+	p.Status.ReadyInstances = readyNodes
 }
 
 func (p *ComputeNode) SetPodNotStarted(readyNodes int32) {
@@ -323,7 +323,7 @@ func (p *ComputeNode) SetPodNotStarted(readyNodes int32) {
 		Status:         corev1.ConditionFalse,
 		LastUpdateTime: metav1.Now(),
 	})
-	p.Status.ReadyNodes = readyNodes
+	p.Status.ReadyInstances = readyNodes
 }
 
 func (p *ComputeNode) SetReady(readyNodes int32) {
@@ -333,7 +333,7 @@ func (p *ComputeNode) SetReady(readyNodes int32) {
 		Status:         corev1.ConditionTrue,
 		LastUpdateTime: metav1.Now(),
 	})
-	p.Status.ReadyNodes = readyNodes
+	p.Status.ReadyInstances = readyNodes
 
 }
 
@@ -346,7 +346,7 @@ func (p *ComputeNode) SetFailed() {
 	})
 }
 func (p *ComputeNode) UpdateReadyNodes(readyNodes int32) {
-	p.Status.ReadyNodes = readyNodes
+	p.Status.ReadyInstances = readyNodes
 }
 
 func init() {

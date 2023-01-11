@@ -222,7 +222,7 @@ func (r *ComputeNodeReconciler) reconcilePodList(ctx context.Context, cn *v1alph
 			})
 		}
 	}
-	cur.Status.ReadyNodes = readyNodes
+	cur.Status.ReadyInstances = readyNodes
 
 	// TODO: Compare Status with or without modification
 	if err := r.Status().Update(ctx, cur); err != nil {
