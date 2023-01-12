@@ -214,22 +214,22 @@ type ComputeNodeSpec struct {
 	Bootstrap BootstrapConfig `json:"bootstrap,omitempty"`
 	// replicas is the expected number of replicas of ShardingSphere-Proxy
 	// +optional
-	Replicas int32 `json:"replicas"`
+	Replicas int32 `json:"replicas,omitempty"`
 	// +optional
-	Probes *ProxyProbe `json:"probes"`
+	Probes *ProxyProbe `json:"probes,omitempty"`
 	// +optional
-	Service Service `json:"service"`
+	Service Service `json:"service,omitempty"`
 	// +optional
 	Connector *Connector `json:"connector,omitempty"`
 	// version  is the version of ShardingSphere-Proxy
-	Version string `json:"version"`
+	Version string `json:"version,omitempty"`
 	// +optional
 	ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
 	// port is ShardingSphere-Proxy startup port
 	// +optional
-	Ports []corev1.ContainerPort `json:"ports"`
+	Ports []corev1.ContainerPort `json:"ports,omitempty"`
 	// +optional
-	Env []corev1.EnvVar `json:"env"`
+	Env []corev1.EnvVar `json:"env,omitempty"`
 	// +optional
 	Resources v1.ResourceRequirements `json:"resources,omitempty"`
 }
