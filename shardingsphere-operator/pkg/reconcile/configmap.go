@@ -18,6 +18,9 @@
 package reconcile
 
 import (
+	"encoding/json"
+	"reflect"
+
 	"github.com/apache/shardingsphere-on-cloud/shardingsphere-operator/api/v1alpha1"
 	"gopkg.in/yaml.v2"
 	v1 "k8s.io/api/core/v1"
@@ -36,10 +39,23 @@ func ComputeNodeNewConfigMap(cn *v1alpha1.ComputeNode) *v1.ConfigMap {
 		cm.Data["logback.xml"] = string(cn.Spec.Bootstrap.LogbackConfig)
 	}
 
-	if y, err := yaml.Marshal(cn.Spec.Bootstrap.ServerConfig); err == nil {
-		cm.Data["server.yaml"] = string(y)
+	anno := cn.Annotations["computenode.shardingsphere.org/server-config-mode-cluster"]
+	// NOTE: ShardingSphere Proxy 5.3.0 needs a server.yaml no matter if it is empty
+	if !reflect.DeepEqual(cn.Spec.Bootstrap.ServerConfig, v1alpha1.ServerConfig{}) {
+		servconf := cn.Spec.Bootstrap.ServerConfig.DeepCopy()
+		repo := &v1alpha1.Repository{}
+		if cn.Spec.Bootstrap.ServerConfig.Mode.Type == v1alpha1.ModeTypeCluster {
+			if len(anno) > 0 {
+				json.Unmarshal([]byte(anno), &repo)
+			}
+		}
+		servconf.Mode.Repository = *repo
+		if y, err := yaml.Marshal(servconf); err == nil {
+			cm.Data["server.yaml"] = string(y)
+		}
+	} else {
+		cm.Data["server.yaml"] = "# Empty file is needed"
 	}
-
 	return cm
 }
 

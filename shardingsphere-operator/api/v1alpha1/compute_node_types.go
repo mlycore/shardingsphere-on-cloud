@@ -24,7 +24,6 @@ import (
 )
 
 // +kubebuilder:object:root=true
-
 // ComputeNodeList contains a list of ComputeNode
 type ComputeNodeList struct {
 	metav1.TypeMeta `json:",inline"`
@@ -32,12 +31,11 @@ type ComputeNodeList struct {
 	Items           []ComputeNode `json:"items"`
 }
 
-//+kubebuilder:printcolumn:JSONPath=".status.readyInstances",name=ReadyInstances,type=integer
-//+kubebuilder:printcolumn:JSONPath=".status.phase",name=Phase,type=string
-//+kubebuilder:printcolumn:JSONPath=".metadata.creationTimestamp",name="Age",type="date"
-//+kubebuilder:object:root=true
-//+kubebuilder:subresource:status
-
+// +kubebuilder:printcolumn:JSONPath=".status.readyInstances",name=ReadyInstances,type=integer
+// +kubebuilder:printcolumn:JSONPath=".status.phase",name=Phase,type=string
+// +kubebuilder:printcolumn:JSONPath=".metadata.creationTimestamp",name="Age",type="date"
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
 // ComputeNode is the Schema for the ShardingSphere Proxy API
 type ComputeNode struct {
 	metav1.TypeMeta   `json:",inline"`
@@ -54,18 +52,25 @@ const (
 	AllPermitted PrivilegeType = "ALL_PERMITTED"
 )
 
+// ComputeNodePrivilege for storage node, the default value is ALL_PERMITTED
 type ComputeNodePrivilege struct {
 	Type PrivilegeType `json:"type"`
 }
 
+// ComputeNodeUser is a slice about authorized host and password for compute node.
+// Format:
+// user:<username>@<hostname>,hostname is % or empty string means do not care about authorized host
+// password:<password>
 type ComputeNodeUser struct {
 	User     string `json:"user"`
 	Password string `json:"password"`
 }
 
+// ComputeNodeAuth  is used to set up initial user to login compute node, and authority data of storage node.
 type ComputeNodeAuthority struct {
+	Users []ComputeNodeUser `json:"users"`
+	// +optional
 	Privilege ComputeNodePrivilege `json:"privilege"`
-	Users     []ComputeNodeUser    `json:"users"`
 }
 
 type RepositoryType string
@@ -75,51 +80,35 @@ const (
 	RepositoryTypeEtcd      RepositoryType = "Etcd"
 )
 
+// Repository is the metadata persistent store for ShardingSphere
 type Repository struct {
-	Type  RepositoryType `json:"type"`
-	Props ClusterProps   `json:"props"`
+	// +kubebuilder:validation:Enum=ZooKeeper;Etcd
+	// type of metadata repository
+	Type RepositoryType `json:"type"`
+	// properties of metadata repository
+	// +optional
+	Props ClusterProps `json:"props"`
 }
 
-// Use these consts for verification
-// const (
-// 	PropsKeyKernelExecutorSize           = "kernel-executor-size"
-// 	PropsKeyCheckTableMetadataEnabled    = "check-table-metadata-enabled"
-// 	PropsKeyProxyBackendQueryFetchSize   = "proxy-backend-query-fetch-size"
-// 	PropsKeyCheckDuplicateTableEnabled   = "check-duplicate-table-enabled"
-// 	PropsKeyFrontendExecutorSize         = "proxy-frontend-executor-size"
-// 	PropsKeyBackendExecutorSuitable      = "proxy-backend-executor-suitable"
-// 	PropsKeyBackendDriverType            = "proxy-backend-driver-type"
-// 	PropsKeyFrontendDatabaseProtocolType = "proxy-frontend-database-protocol-type"
-// )
-
-// const (
-// 	ClusterPropsKeyNamespace                    = "namespace"
-// 	ClusterPropsKeyServerLists                  = "server-lists"
-// 	ClusterPropsKeyRetryIntervalMilliseconds    = "retryIntervalMilliseconds"
-// 	ClusterPropsKeyMaxRetries                   = "maxRetries"
-// 	ClusterPropsKeyTimeToLiveSeconds            = "timeToLiveSeconds"
-// 	ClusterPropsKeyOperationTimeoutMilliseconds = "operationTimeoutMilliseconds"
-// 	ClusterPropsKeyDigest                       = "digest"
-// )
-
+// ComputeNodeClustersProps is the properties of a ShardingSphere Cluster
 type ComputeNodeClusterProps struct {
-	// Namespace of registry center
+	// namespace of registry center
 	Namespace string `json:"namespace" yaml:"namespace"`
-	//Server lists of registry center
+	// server lists of registry center
 	ServerLists string `json:"server-lists" yaml:"server-lists"`
-	//RetryIntervalMilliseconds Milliseconds of retry interval. default: 500
+	// retryIntervalMilliseconds Milliseconds of retry interval. default: 500
 	// +optional
 	RetryIntervalMilliseconds int `json:"retryIntervalMilliseconds,omitempty" yaml:"retryIntervalMilliseconds,omitempty"`
-	// MaxRetries Max retries of client connection. default: 3
+	// the max retries of client connection. default: 3
 	// +optional
 	MaxRetries int `json:"maxRetries,omitempty" yaml:"maxRetries,omitempty"`
-	// TimeToLiveSeconds Seconds of ephemeral data live.default: 60
+	// the seconds of ephemeral data live. default: 60
 	// +optional
 	TimeToLiveSeconds int `json:"timeToLiveSeconds,omitempty" yaml:"timeToLiveSeconds,omitempty"`
-	// OperationTimeoutMilliseconds Milliseconds of operation timeout. default: 500
+	// the milliseconds of operation timeout. default: 500
 	// +optional
 	OperationTimeoutMilliseconds int `json:"operationTimeoutMilliseconds,omitempty" yaml:"operationTimeoutMilliseconds,omitempty"`
-	// Password of login
+	// password of login
 	// +optional
 	Digest string `json:"digest,omitempty" yaml:"digest,omitempty"`
 }
@@ -127,28 +116,28 @@ type ComputeNodeClusterProps struct {
 type ModeType string
 
 const (
-	ModeTypeCluster    ModeType = "cluster"
-	ModeTypeStandalone ModeType = "memory"
+	ModeTypeCluster    ModeType = "Cluster"
+	ModeTypeStandalone ModeType = "Standalone"
 )
 
-// Props Apache ShardingSphere provides the way of property configuration to configure system level configuration.
+// ComputeNodeProps is which Apache ShardingSphere provides the way of property configuration to configure system level configuration.
 type ComputeNodeProps struct {
-	// The max thread size of worker group to execute SQL. One ShardingSphereDataSource will use a independent thread pool, it does not share thread pool even different data source in same JVM.
+	// the max thread size of worker group to execute SQL. One ShardingSphereDataSource will use a independent thread pool, it does not share thread pool even different data source in same JVM.
 	// +optional
 	KernelExecutorSize int `json:"kernel-executor-size,omitempty" yaml:"kernel-executor-size,omitempty"`
-	// Whether validate table meta data consistency when application startup or updated.
+	// whether validate table meta data consistency when application startup or updated.
 	// +optional
 	CheckTableMetadataEnabled bool `json:"check-table-metadata-enabled,omitempty" yaml:"check-table-metadata-enabled,omitempty"`
-	// ShardingSphereProxy backend query fetch size. A larger value may increase the memory usage of ShardingSphere ShardingSphereProxy. The default value is -1, which means set the minimum value for different JDBC drivers.
+	// ShardingSphere Proxy backend query fetch size. A larger value may increase the memory usage of ShardingSphere ShardingSphereProxy. The default value is -1, which means set the minimum value for different JDBC drivers.
 	// +optional
 	ProxyBackendQueryFetchSize int `json:"proxy-backend-query-fetch-size,omitempty" yaml:"proxy-backend-query-fetch-size,omitempty"`
-	// Whether validate duplicate table when application startup or updated.
+	// whether validate duplicate table when application startup or updated.
 	// +optional
 	CheckDuplicateTableEnabled bool `json:"check-duplicate-table-enabled,omitempty" yaml:"check-duplicate-table-enabled,omitempty"`
-	// ShardingSphereProxy frontend Netty executor size. The default value is 0, which means let Netty decide.
+	// ShardingSphere Proxy frontend Netty executor size. The default value is 0, which means let Netty decide.
 	// +optional
 	ProxyFrontendExecutorSize int `json:"proxy-frontend-executor-size,omitempty" yaml:"proxy-frontend-executor-size,omitempty"`
-	// Available options of proxy backend executor suitable: OLAP(default), OLTP. The OLTP option may reduce time cost of writing packets to client, but it may increase the latency of SQL execution and block other clients if client connections are more than proxy-frontend-executor-size, especially executing slow SQL.
+	// available options of proxy backend executor suitable: OLAP(default), OLTP. The OLTP option may reduce time cost of writing packets to client, but it may increase the latency of SQL execution and block other clients if client connections are more than proxy-frontend-executor-size, especially executing slow SQL.
 	// +optional
 	ProxyBackendExecutorSuitable string `json:"proxy-backend-executor-suitable,omitempty" yaml:"proxy-backend-executor-suitable,omitempty"`
 	// +optional
@@ -157,11 +146,14 @@ type ComputeNodeProps struct {
 	ProxyFrontendDatabaseProtocolType string `json:"proxy-frontend-database-protocol-type" yaml:"proxy-frontend-database-protocol-type,omitempty"`
 }
 
+// ComputeNodeServerMode is the mode for ShardingSphere Proxy
 type ComputeNodeServerMode struct {
+	// +optional
 	Repository Repository `json:"repository"`
 	Type       ModeType   `json:"type"`
 }
 
+// ServerConfig defines the bootstrap config for a ShardingSphere Proxy
 type ServerConfig struct {
 	Authority ComputeNodeAuthority  `json:"authority"`
 	Mode      ComputeNodeServerMode `json:"mode"`
@@ -169,16 +161,17 @@ type ServerConfig struct {
 	Props *ComputeNodeProps `json:"props"`
 }
 
+// LogbackConfig contains contents of the expected logback.xml
 type LogbackConfig string
 
 // ServiceType defines the Service in Kubernetes of ShardingSphere-Proxy
 type Service struct {
 	Ports []corev1.ServicePort `json:"ports,omitempty"`
-
 	// +kubebuilder:validation:Enum=ClusterIP;NodePort;LoadBalancer;ExternalName
 	Type corev1.ServiceType `json:"type"`
 }
 
+// ProxyProbe defines the probe actions for LivenesProbe, ReadinessProbe and StartupProbe
 type ProxyProbe struct {
 	// Probes are not allowed for ephemeral containers.
 	// +optional
@@ -191,6 +184,7 @@ type ProxyProbe struct {
 	StartupProbe *corev1.Probe `json:"startupProbe,omitempty"`
 }
 
+// ConnectorType defines the frontend protocol for ShardingSphere Proxy
 type ConnectorType string
 
 const (
@@ -206,6 +200,7 @@ type Connector struct {
 	Version string `json:"version"`
 }
 
+// BootstrapConfig is used for any ShardingSphere Proxy startup
 type BootstrapConfig struct {
 	// +optional
 	ServerConfig ServerConfig `json:"serverConfig,omitempty"`
@@ -215,50 +210,43 @@ type BootstrapConfig struct {
 
 // ProxySpec defines the desired state of ShardingSphereProxy
 type ComputeNodeSpec struct {
+	// +optional
 	Bootstrap BootstrapConfig `json:"bootstrap,omitempty"`
-
-	// AutomaticScaling *AutomaticScaling `json:"automaticScaling,omitempty"`
-	//Replicas is the expected number of replicas of ShardingSphere-Proxy
+	// replicas is the expected number of replicas of ShardingSphere-Proxy
+	// +optional
 	Replicas int32 `json:"replicas"`
-
 	// +optional
 	Probes *ProxyProbe `json:"probes"`
-
 	// +optional
 	Service Service `json:"service"`
-
 	// +optional
 	Connector *Connector `json:"connector,omitempty"`
-
-	// Version  is the version of ShardingSphere-Proxy
+	// version  is the version of ShardingSphere-Proxy
 	Version string `json:"version"`
 	// +optional
 	ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
-
+	// port is ShardingSphere-Proxy startup port
 	// +optional
-	// Port is ShardingSphere-Proxy startup port
 	Ports []corev1.ContainerPort `json:"ports"`
-
 	// +optional
 	Env []corev1.EnvVar `json:"env"`
-
 	// +optional
 	Resources v1.ResourceRequirements `json:"resources,omitempty"`
 }
 
-// ComputeNodeStatus defines the observed state of ShardingSphereProxy
+// ComputeNodeStatus defines the observed state of ShardingSphere Proxy
 type ComputeNodeStatus struct {
-	//ShardingSphere-Proxy phase are a brief summary of the ShardingSphere-Proxy life cycle
-	//There are two possible phase values:
-	//Ready: ShardingSphere-Proxy can already provide external services
-	//NotReady: ShardingSphere-Proxy cannot provide external services
+	// ShardingSphere-Proxy phase are a brief summary of the ShardingSphere-Proxy life cycle
+	// There are two possible phase values:
+	// Ready: ShardingSphere-Proxy can already provide external services
+	// NotReady: ShardingSphere-Proxy cannot provide external services
 	// +optional
 	Phase ComputeNodePhaseStatus `json:"phase"`
 
-	//Conditions The conditions array, the reason and message fields
+	// Conditions The conditions array, the reason and message fields
 	// +optional
 	Conditions ComputeNodeConditions `json:"conditions"`
-	//ReadyNodes shows the number of replicas that ShardingSphere-Proxy is running normally
+	// ReadyInstances shows the number of replicas that ShardingSphere-Proxy is running normally
 	// +optional
 	ReadyInstances int32 `json:"readyInstances"`
 }
@@ -272,7 +260,7 @@ const (
 
 type ComputeNodeConditionType string
 
-// ConditionType shows some states during the startup process of ShardingSphere-Proxy
+// ComputeNodeConditionType shows some states during the startup process of ShardingSphere-Proxy
 const (
 	ComputeNodeConditionInitialized ComputeNodeConditionType = "Initialized"
 	ComputeNodeConditionStarted     ComputeNodeConditionType = "Started"
@@ -284,7 +272,7 @@ const (
 
 type ComputeNodeConditions []ComputeNodeCondition
 
-// Condition
+// ComputeNodeCondition
 // | **phase** | **condition**  | **descriptions**|
 // | ------------- | ---------- | ---------------------------------------------------- |
 // | NotReady      | Deployed   | pods are deployed but are not created or currently pending|
@@ -296,67 +284,6 @@ type ComputeNodeCondition struct {
 	Type           ComputeNodeConditionType `json:"type"`
 	Status         corev1.ConditionStatus   `json:"status"`
 	LastUpdateTime metav1.Time              `json:"lastUpdateTime,omitempty"`
-}
-
-func (p *ComputeNode) SetInitialized() {
-	p.Status.Phase = ComputeNodeStatusNotReady
-	p.Status.Conditions = append([]ComputeNodeCondition{}, ComputeNodeCondition{
-		Type:           ComputeNodeConditionInitialized,
-		Status:         corev1.ConditionTrue,
-		LastUpdateTime: metav1.Now(),
-	})
-}
-
-func (p *ComputeNode) SetInitializationFailed() {
-	p.Status.Phase = ComputeNodeStatusNotReady
-	p.Status.Conditions = append([]ComputeNodeCondition{}, ComputeNodeCondition{
-		Type:           ComputeNodeConditionInitialized,
-		Status:         corev1.ConditionFalse,
-		LastUpdateTime: metav1.Now(),
-	})
-}
-
-func (p *ComputeNode) SetPodStarted(readyNodes int32) {
-	p.Status.Phase = ComputeNodeStatusNotReady
-	p.Status.Conditions = append([]ComputeNodeCondition{}, ComputeNodeCondition{
-		Type:           ComputeNodeConditionStarted,
-		Status:         corev1.ConditionTrue,
-		LastUpdateTime: metav1.Now(),
-	})
-	p.Status.ReadyInstances = readyNodes
-}
-
-func (p *ComputeNode) SetPodNotStarted(readyNodes int32) {
-	p.Status.Phase = ComputeNodeStatusNotReady
-	p.Status.Conditions = append([]ComputeNodeCondition{}, ComputeNodeCondition{
-		Type:           ComputeNodeConditionStarted,
-		Status:         corev1.ConditionFalse,
-		LastUpdateTime: metav1.Now(),
-	})
-	p.Status.ReadyInstances = readyNodes
-}
-
-func (p *ComputeNode) SetReady(readyNodes int32) {
-	p.Status.Phase = ComputeNodeStatusReady
-	p.Status.Conditions = append([]ComputeNodeCondition{}, ComputeNodeCondition{
-		Type:           ComputeNodeConditionReady,
-		Status:         corev1.ConditionTrue,
-		LastUpdateTime: metav1.Now(),
-	})
-	p.Status.ReadyInstances = readyNodes
-
-}
-
-func (p *ComputeNode) SetFailed() {
-	p.Status.Phase = ComputeNodeStatusNotReady
-	p.Status.Conditions = append([]ComputeNodeCondition{}, ComputeNodeCondition{
-		Type:           ComputeNodeConditionUnknown,
-		Status:         corev1.ConditionTrue,
-		LastUpdateTime: metav1.Now(),
-	})
-}
-func (p *ComputeNode) UpdateReadyNodes(readyNodes int32) {
-	p.Status.ReadyInstances = readyNodes
 }
 
 func init() {
