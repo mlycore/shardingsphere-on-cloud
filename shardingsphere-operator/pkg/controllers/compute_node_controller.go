@@ -78,7 +78,7 @@ func (r *ComputeNodeReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		log.Error(err, "Reconcile ConfigMap Error")
 		errors = append(errors, err)
 	}
-	if err := r.reconcilePodlist(ctx, cn.Namespace, cn.Name, cn.Labels); err != nil {
+	if err := r.reconcileStatus(ctx, cn.Namespace, cn.Name, cn.Labels); err != nil {
 		log.Error(err, "Reconcile PodList Error")
 		errors = append(errors, err)
 	}
@@ -170,9 +170,17 @@ func (r *ComputeNodeReconciler) reconcileConfigMap(ctx context.Context, cn *v1al
 	return nil
 }
 
-func (r *ComputeNodeReconciler) reconcilePodlist(ctx context.Context, namespace, name string, labels map[string]string) error {
+func (r *ComputeNodeReconciler) reconcileStatus(ctx context.Context, namespace, name string, labels map[string]string) error {
 	podList := &v1.PodList{}
 	if err := r.List(ctx, podList, client.InNamespace(namespace), client.MatchingLabels(labels)); err != nil {
+		return err
+	}
+
+	service := &v1.Service{}
+	if err := r.Get(ctx, types.NamespacedName{
+		Namespace: namespace,
+		Name:      name,
+	}, service); err != nil {
 		return err
 	}
 
@@ -184,7 +192,7 @@ func (r *ComputeNodeReconciler) reconcilePodlist(ctx context.Context, namespace,
 		return err
 	}
 
-	rt.Status = ReconcileComputeNodeStatus(*podList, *rt)
+	rt.Status = ReconcileComputeNodeStatus(*podList, *service, *rt)
 
 	// TODO: Compare Status with or without modification
 	if err := r.Status().Update(ctx, rt); err != nil {
@@ -247,7 +255,7 @@ func updateNotReadyConditions(conditions []v1alpha1.ComputeNodeCondition, cond v
 	for idx, _ := range cur {
 		if cur[idx].Type == v1alpha1.ComputeNodeConditionReady {
 			cur[idx].LastUpdateTime = metav1.Now()
-			cur[idx].Status = v1.ConditionFalse
+			cur[idx].Status = v1alpha1.ConditionStatusFalse
 		}
 	}
 
@@ -262,22 +270,22 @@ func clusterCondition(podlist v1.PodList) v1alpha1.ComputeNodeCondition {
 
 	condStarted := v1alpha1.ComputeNodeCondition{
 		Type:           v1alpha1.ComputeNodeConditionStarted,
-		Status:         v1.ConditionTrue,
+		Status:         v1alpha1.ConditionStatusTrue,
 		LastUpdateTime: metav1.Now(),
 	}
 	condUnknown := v1alpha1.ComputeNodeCondition{
 		Type:           v1alpha1.ComputeNodeConditionUnknown,
-		Status:         v1.ConditionTrue,
+		Status:         v1alpha1.ConditionStatusTrue,
 		LastUpdateTime: metav1.Now(),
 	}
 	condDeployed := v1alpha1.ComputeNodeCondition{
 		Type:           v1alpha1.ComputeNodeConditionDeployed,
-		Status:         v1.ConditionTrue,
+		Status:         v1alpha1.ConditionStatusTrue,
 		LastUpdateTime: metav1.Now(),
 	}
 	condFailed := v1alpha1.ComputeNodeCondition{
 		Type:           v1alpha1.ComputeNodeConditionFailed,
-		Status:         v1.ConditionTrue,
+		Status:         v1alpha1.ConditionStatusTrue,
 		LastUpdateTime: metav1.Now(),
 	}
 
@@ -297,7 +305,7 @@ func clusterCondition(podlist v1.PodList) v1alpha1.ComputeNodeCondition {
 	return cond
 }
 
-func ReconcileComputeNodeStatus(podlist v1.PodList, rt v1alpha1.ComputeNode) v1alpha1.ComputeNodeStatus {
+func ReconcileComputeNodeStatus(podlist v1.PodList, svc v1.Service, rt v1alpha1.ComputeNode) v1alpha1.ComputeNodeStatus {
 	readyNodes := getReadyNodes(podlist)
 
 	rt.Status.ReadyInstances = readyNodes
@@ -314,13 +322,16 @@ func ReconcileComputeNodeStatus(podlist v1.PodList, rt v1alpha1.ComputeNode) v1a
 	if rt.Status.Phase == v1alpha1.ComputeNodeStatusReady {
 		rt.Status.Conditions = updateReadyConditions(rt.Status.Conditions, v1alpha1.ComputeNodeCondition{
 			Type:           v1alpha1.ComputeNodeConditionReady,
-			Status:         v1.ConditionTrue,
+			Status:         v1alpha1.ConditionStatusTrue,
 			LastUpdateTime: metav1.Now(),
 		})
 	} else {
 		cond := clusterCondition(podlist)
 		rt.Status.Conditions = updateNotReadyConditions(rt.Status.Conditions, cond)
 	}
+
+	rt.Status.LoadBalancer.ClusterIP = svc.Spec.ClusterIP
+	rt.Status.LoadBalancer.Ingress = svc.Status.LoadBalancer.Ingress
 
 	return rt.Status
 }

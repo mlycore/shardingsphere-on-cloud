@@ -35,12 +35,24 @@ func ComputeNodeNewDeployment(cn *v1alpha1.ComputeNode) *v1.Deployment {
 	deploy.Name = cn.Name
 	deploy.Namespace = cn.Namespace
 	deploy.Labels = cn.Labels
-	deploy.Spec.Selector.MatchLabels = cn.Labels
+	// deploy.Spec.Selector.MatchLabels = cn.Labels
+	deploy.Spec.Selector = cn.Spec.Selector
 	deploy.Spec.Replicas = &cn.Spec.Replicas
 	deploy.Spec.Template.Labels = cn.Labels
-	deploy.Spec.Template.Spec.Containers[0].Image = fmt.Sprintf("%s:%s", imageName, cn.Spec.Version)
+	deploy.Spec.Template.Spec.Containers[0].Image = fmt.Sprintf("%s:%s", imageName, cn.Spec.ServerVersion)
 	// TODO: don't use v1.Port directly
-	deploy.Spec.Template.Spec.Containers[0].Ports = cn.Spec.Ports
+	// deploy.Spec.Template.Spec.Containers[0].Ports = cn.Spec.Ports
+	if deploy.Spec.Template.Spec.Containers[0].Ports == nil {
+		deploy.Spec.Template.Spec.Containers[0].Ports = []corev1.ContainerPort{}
+	}
+	for _, pb := range cn.Spec.PortBindings {
+		deploy.Spec.Template.Spec.Containers[0].Ports = append(deploy.Spec.Template.Spec.Containers[0].Ports, corev1.ContainerPort{
+			Name:          pb.Name,
+			HostIP:        pb.HostIP,
+			ContainerPort: pb.ContainerPort,
+			Protocol:      pb.Protocol,
+		})
+	}
 
 	// additional information
 	deploy.Spec.Template.Spec.Containers[0].Resources = cn.Spec.Resources
@@ -64,30 +76,30 @@ func ComputeNodeNewDeployment(cn *v1alpha1.ComputeNode) *v1.Deployment {
 	if len(cn.Spec.ImagePullSecrets) > 0 {
 		deploy.Spec.Template.Spec.ImagePullSecrets = cn.Spec.ImagePullSecrets
 	}
-	if cn.Spec.Connector != nil {
-		if cn.Spec.Connector.Type == v1alpha1.ConnectorTypeMySQL {
+	if cn.Spec.StorageNodeConnector != nil {
+		if cn.Spec.StorageNodeConnector.Type == v1alpha1.ConnectorTypeMySQL {
 			// add or update initContainer
 			if len(deploy.Spec.Template.Spec.InitContainers) > 0 {
 				for idx, v := range deploy.Spec.Template.Spec.InitContainers[0].Env {
 					if v.Name == "MYSQL_CONNECTOR_VERSION" {
-						deploy.Spec.Template.Spec.InitContainers[0].Env[idx].Value = cn.Spec.Connector.Version
+						deploy.Spec.Template.Spec.InitContainers[0].Env[idx].Value = cn.Spec.StorageNodeConnector.Version
 					}
 				}
 			} else {
 				deploy.Spec.Template.Spec.InitContainers = []corev1.Container{
 					{
-						Name:    "download-mysql-connect",
+						Name:    "boostrap",
 						Image:   "busybox:1.35.0",
 						Command: []string{"/bin/sh", "-c", download_script},
 						Env: []corev1.EnvVar{
 							{
 								Name:  "MYSQL_CONNECTOR_VERSION",
-								Value: cn.Spec.Connector.Version,
+								Value: cn.Spec.StorageNodeConnector.Version,
 							},
 						},
 						VolumeMounts: []corev1.VolumeMount{
 							{
-								Name:      "connectors",
+								Name:      "mysql-connector-java",
 								MountPath: "/opt/shardingsphere-proxy/ext-lib",
 							},
 						},
@@ -95,12 +107,13 @@ func ComputeNodeNewDeployment(cn *v1alpha1.ComputeNode) *v1.Deployment {
 				}
 
 				deploy.Spec.Template.Spec.Containers[0].VolumeMounts = append(deploy.Spec.Template.Spec.Containers[0].VolumeMounts, corev1.VolumeMount{
-					Name:      "connectors",
-					MountPath: "/opt/shardingsphere-proxy/ext-lib",
+					Name:      "mysql-connector-java",
+					SubPath:   fmt.Sprintf("mysql-connector-java-%s.jar", cn.Spec.StorageNodeConnector.Version),
+					MountPath: fmt.Sprintf("/opt/shardingsphere-proxy/ext-lib/mysql-connector-java-%s.jar", cn.Spec.StorageNodeConnector.Version),
 				})
 
 				deploy.Spec.Template.Spec.Volumes = append(deploy.Spec.Template.Spec.Volumes, corev1.Volume{
-					Name: "connectors",
+					Name: "mysql-connector-java",
 					VolumeSource: corev1.VolumeSource{
 						EmptyDir: &corev1.EmptyDirVolumeSource{},
 					},

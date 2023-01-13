@@ -22,11 +22,16 @@ import (
 	"reflect"
 
 	"github.com/apache/shardingsphere-on-cloud/shardingsphere-operator/api/v1alpha1"
+	"github.com/mlycore/log"
 	"gopkg.in/yaml.v2"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
+
+func init() {
+	log.SetLevel("debug")
+}
 
 func ComputeNodeNewConfigMap(cn *v1alpha1.ComputeNode) *v1.ConfigMap {
 	cluster := cn.Annotations["computenode.shardingsphere.org/server-config-mode-cluster"]
@@ -59,6 +64,7 @@ func ComputeNodeNewConfigMap(cn *v1alpha1.ComputeNode) *v1.ConfigMap {
 	} else {
 		cm.Data["server.yaml"] = "# Empty file is needed"
 	}
+
 	return cm
 }
 

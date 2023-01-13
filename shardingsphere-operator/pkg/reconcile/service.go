@@ -21,9 +21,11 @@ import (
 	"reflect"
 
 	"github.com/apache/shardingsphere-on-cloud/shardingsphere-operator/api/v1alpha1"
+	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
 func ComputeNodeNewService(cn *v1alpha1.ComputeNode) *v1.Service {
@@ -31,9 +33,24 @@ func ComputeNodeNewService(cn *v1alpha1.ComputeNode) *v1.Service {
 	svc.Name = cn.Name
 	svc.Namespace = cn.Namespace
 	svc.Labels = cn.Labels
-	svc.Spec.Selector = cn.Labels
-	svc.Spec.Type = cn.Spec.Service.Type
-	svc.Spec.Ports = cn.Spec.Service.Ports
+	// svc.Spec.Selector = cn.Labels
+	svc.Spec.Selector = cn.Spec.Selector.MatchLabels
+	// svc.Spec.Type = cn.Spec.Service.Type
+	svc.Spec.Type = cn.Spec.ServiceType
+	// svc.Spec.Ports = cn.Spec.Service.Ports
+
+	if svc.Spec.Ports == nil {
+		svc.Spec.Ports = []corev1.ServicePort{}
+	}
+	for _, pb := range cn.Spec.PortBindings {
+		svc.Spec.Ports = append(svc.Spec.Ports, corev1.ServicePort{
+			Name:       pb.Name,
+			TargetPort: intstr.FromInt(int(pb.ContainerPort)),
+			Port:       pb.ServicePort,
+			NodePort:   pb.NodePort,
+			Protocol:   pb.Protocol,
+		})
+	}
 
 	return svc
 }
