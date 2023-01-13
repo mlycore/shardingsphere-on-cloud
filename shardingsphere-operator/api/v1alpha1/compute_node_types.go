@@ -33,7 +33,8 @@ type ComputeNodeList struct {
 
 // +kubebuilder:printcolumn:JSONPath=".status.readyInstances",name=ReadyInstances,type=integer
 // +kubebuilder:printcolumn:JSONPath=".status.phase",name=Phase,type=string
-// +kubebuilder:printcolumn:JSONPath=".metadata.creationTimestamp",name="Age",type="date"
+// +kubebuilder:printcolumn:JSONPath=".status.loadBalancer.clusterIP",name="ClusterIP",type=string
+// +kubebuilder:printcolumn:JSONPath=".metadata.creationTimestamp",name=Age,type=date
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // ComputeNode is the Schema for the ShardingSphere Proxy API
@@ -87,7 +88,8 @@ type Repository struct {
 	Type RepositoryType `json:"type"`
 	// properties of metadata repository
 	// +optional
-	Props ClusterProps `json:"props"`
+	// Props ComputeNodeClusterProps `json:"props,omitempty"`
+	Props Properties `json:"props,omitempty"`
 }
 
 // ComputeNodeClustersProps is the properties of a ShardingSphere Cluster
@@ -158,11 +160,86 @@ type ServerConfig struct {
 	Authority ComputeNodeAuthority  `json:"authority"`
 	Mode      ComputeNodeServerMode `json:"mode"`
 	//+optional
-	Props *ComputeNodeProps `json:"props"`
+	// Props *ComputeNodeProps `json:"props,omitempty"`
+	Props Properties `json:"props,omitempty"`
 }
 
 // LogbackConfig contains contents of the expected logback.xml
 type LogbackConfig string
+
+// +kubebuilder:pruning:PreserveUnknownFields
+type Properties map[string]string
+
+type BaseLogging struct {
+	Props Properties `json:"props,omitempty"`
+}
+
+// PluginLogging defines the plugin for logging
+type PluginLogging struct {
+	BaseLogging BaseLogging `json:"baseLogging,omitempty" yaml:"BaseLogging"`
+}
+
+type Prometheus struct {
+	Host  string     `json:"host"`
+	Port  int32      `json:"port"`
+	Props Properties `json:"properties,omitempty"`
+}
+
+// PluginMetrics defines the plugin for metrics
+type PluginMetrics struct {
+	Prometheus Prometheus `json:"prometheus,omitempty" yaml:"Prometheus"`
+}
+
+type JaegerTracing struct {
+	Host  string     `json:"host"`
+	Port  int32      `json:"port"`
+	Props Properties `json:"props,omitempty"`
+}
+
+type ZipkinTracing struct {
+	Host  string     `json:"host"`
+	Port  int32      `json:"port"`
+	Props Properties `json:"props,omitempty"`
+}
+
+type SkyWalkingTracing struct {
+	Props Properties `json:"props,omitempty"`
+}
+
+type OpenTelemetryTracing struct {
+	Props Properties `json:"props,omitempty"`
+}
+
+type Tracing struct {
+	// +optional
+	Jaeger JaegerTracing `json:"jaeger,omitempty" yaml:"Jaeger"`
+	// +optional
+	Zipkin ZipkinTracing `json:"zipkin,omitempty" yaml:"Zipkin"`
+	// +optional
+	SkyWalking SkyWalkingTracing `json:"skyWalking,omitempty" yaml:"SkyWalking"`
+	// +optional
+	OpenTelemetry OpenTelemetryTracing `json:"openTelemetry,omitempty" yaml:"OpenTelemetry"`
+}
+
+// PluginTracing defines the plugin for tracing
+type PluginTracing struct {
+	Tracing Tracing `json:"tracing,omitempty"`
+}
+
+// AgentPlugin defines a set of plugins for ShardingSphere Agent
+type AgentPlugin struct {
+	// +optional
+	Logging PluginLogging `json:"logging,omitempty"`
+	// +optional
+	Metrics PluginMetrics `json:"metrics,omitempty"`
+	// +optional
+	Tracing PluginTracing `json:"tracing,omitempty"`
+}
+
+// AgentConfig defines the config for ShardingSphere-Agent, renderred as agent.yaml
+type AgentConfig struct {
+	Plugins AgentPlugin `json:"plugins,omitempty"`
+}
 
 // ServiceType defines the Service in Kubernetes of ShardingSphere-Proxy
 type Service struct {
@@ -193,7 +270,7 @@ const (
 )
 
 // MySQLDriver Defines the mysql-driven version in ShardingSphere-proxy
-type Connector struct {
+type StorageNodeConnector struct {
 	Type ConnectorType `json:"type"`
 	// +kubebuilder:validation:Pattern=`^([1-9]\d|[1-9])(\.([1-9]\d|\d)){2}$`
 	// mysql-driven version,must be x.y.z
@@ -206,36 +283,87 @@ type BootstrapConfig struct {
 	ServerConfig ServerConfig `json:"serverConfig,omitempty"`
 	// +optional
 	LogbackConfig LogbackConfig `json:"logbackConfig,omitempty"`
+	// +optional
+	AgentConfig AgentConfig `json:"agentConfig,omitempty"`
+}
+
+type PortBinding struct {
+	// If specified, this must be an IANA_SVC_NAME and unique within the pod. Each
+	// named port in a pod must have a unique name. Name for the port that can be
+	// referred to by services.
+	// +optional
+	Name string `json:"name,omitempty"`
+
+	// Number of port to expose on the pod's IP address.
+	// This must be a valid port number, 0 < x < 65536.
+	ContainerPort int32 `json:"containerPort" yaml:"containerPort"`
+	// Protocol for port. Must be UDP, TCP, or SCTP.
+	// Defaults to "TCP".
+	// +optional
+	// +default="TCP"
+	Protocol corev1.Protocol `json:"protocol,omitempty"`
+	// What host IP to bind the external port to.
+	// +optional
+	HostIP string `json:"hostIP,omitempty" yaml:"hostIP"`
+
+	// The port that will be exposed by this service.
+	ServicePort int32 `json:"servicePort" yaml:"servicePort"`
+
+	// The port on each node on which this service is exposed when type is
+	// NodePort or LoadBalancer.  Usually assigned by the system. If a value is
+	// specified, in-range, and not in use it will be used, otherwise the
+	// operation will fail.  If not specified, a port will be allocated if this
+	// Service requires one.  If this field is specified when creating a
+	// Service which does not need it, creation will fail. This field will be
+	// wiped when updating a Service to no longer need it (e.g. changing type
+	// from NodePort to ClusterIP).
+	// More info: https://kubernetes.io/docs/concepts/services-networking/service/#type-nodeport
+	// +optional
+	NodePort int32 `json:"nodePort,omitempty" yaml:"nodePort"`
 }
 
 // ProxySpec defines the desired state of ShardingSphereProxy
 type ComputeNodeSpec struct {
 	// +optional
-	Bootstrap BootstrapConfig `json:"bootstrap,omitempty"`
+	StorageNodeConnector *StorageNodeConnector `json:"storageNodeConnector,omitempty"`
+	// version  is the version of ShardingSphere-Proxy
+	ServerVersion string `json:"serverVersion,omitempty" yaml:"serverVersion"`
+
 	// replicas is the expected number of replicas of ShardingSphere-Proxy
 	// +optional
 	Replicas int32 `json:"replicas,omitempty"`
+	// selector defines a set of label selectors
+	Selector *metav1.LabelSelector `json:"selector"`
+
 	// +optional
 	Probes *ProxyProbe `json:"probes,omitempty"`
-	// +optional
-	Service Service `json:"service,omitempty"`
-	// +optional
-	Connector *Connector `json:"connector,omitempty"`
-	// version  is the version of ShardingSphere-Proxy
-	Version string `json:"version,omitempty"`
 	// +optional
 	ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
 	// port is ShardingSphere-Proxy startup port
 	// +optional
-	Ports []corev1.ContainerPort `json:"ports,omitempty"`
+	// Ports []corev1.ContainerPort `json:"ports,omitempty"`
 	// +optional
 	Env []corev1.EnvVar `json:"env,omitempty"`
 	// +optional
 	Resources v1.ResourceRequirements `json:"resources,omitempty"`
+	// Service Service `json:"service,omitempty"`
+	// +optional
+	PortBindings []PortBinding `json:"portBindings,omitempty" yaml:"portBinding"`
+
+	// +kubebuilder:validation:Enum=ClusterIP;NodePort;LoadBalancer;ExternalName
+	// +optional
+	ServiceType corev1.ServiceType `json:"serviceType,omitempty" yaml:"serviceType"`
+
+	// +optional
+	Bootstrap BootstrapConfig `json:"bootstrap,omitempty"`
 }
 
 // ComputeNodeStatus defines the observed state of ShardingSphere Proxy
 type ComputeNodeStatus struct {
+	// The generation observed by the deployment controller.
+	// +optional
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+
 	// ShardingSphere-Proxy phase are a brief summary of the ShardingSphere-Proxy life cycle
 	// There are two possible phase values:
 	// Ready: ShardingSphere-Proxy can already provide external services
@@ -249,6 +377,21 @@ type ComputeNodeStatus struct {
 	// ReadyInstances shows the number of replicas that ShardingSphere-Proxy is running normally
 	// +optional
 	ReadyInstances int32 `json:"readyInstances"`
+
+	// LoadBalancer contains the current status of the load-balancer,
+	// if one is present.
+	// +optional
+	LoadBalancer LoadBalancerStatus `json:"loadBalancer,omitempty"`
+}
+
+type LoadBalancerStatus struct {
+	// +optional
+	ClusterIP string `json:"clusterIP,omitempty"`
+
+	// Ingress is a list containing ingress points for the load-balancer.
+	// Traffic intended for the service should be sent to these ingress points.
+	// +optional
+	Ingress []corev1.LoadBalancerIngress `json:"ingress,omitempty"`
 }
 
 type ComputeNodePhaseStatus string
@@ -272,6 +415,14 @@ const (
 
 type ComputeNodeConditions []ComputeNodeCondition
 
+type ConditionStatus string
+
+const (
+	ConditionStatusTrue    = "True"
+	ConditionStatusFalse   = "False"
+	ConditionStatusUnknown = "Unknown"
+)
+
 // ComputeNodeCondition
 // | **phase** | **condition**  | **descriptions**|
 // | ------------- | ---------- | ---------------------------------------------------- |
@@ -282,8 +433,10 @@ type ComputeNodeConditions []ComputeNodeCondition
 // | NotReady      | Failed     | ShardingSphere-Proxy failed to start correctly due to some problems|
 type ComputeNodeCondition struct {
 	Type           ComputeNodeConditionType `json:"type"`
-	Status         corev1.ConditionStatus   `json:"status"`
+	Status         ConditionStatus          `json:"status"`
 	LastUpdateTime metav1.Time              `json:"lastUpdateTime,omitempty"`
+	Reason         string                   `json:"reason"`
+	Message        string                   `json:"message"`
 }
 
 func init() {
