@@ -22,10 +22,14 @@ import (
 	"strings"
 
 	"github.com/apache/shardingsphere-on-cloud/shardingsphere-operator/api/v1alpha1"
+	"github.com/apache/shardingsphere-on-cloud/shardingsphere-operator/pkg/aws"
 	"github.com/apache/shardingsphere-on-cloud/shardingsphere-operator/pkg/controllers"
+	"github.com/apache/shardingsphere-on-cloud/shardingsphere-operator/pkg/kubernetes/computenode"
 	"github.com/apache/shardingsphere-on-cloud/shardingsphere-operator/pkg/kubernetes/configmap"
 	"github.com/apache/shardingsphere-on-cloud/shardingsphere-operator/pkg/kubernetes/deployment"
 	"github.com/apache/shardingsphere-on-cloud/shardingsphere-operator/pkg/kubernetes/service"
+	"github.com/apache/shardingsphere-on-cloud/shardingsphere-operator/pkg/kubernetes/storagenode"
+	meshapi "github.com/database-mesh/golang-sdk/kubernetes/api/v1alpha1"
 	"go.uber.org/zap/zapcore"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -42,6 +46,7 @@ var (
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(v1alpha1.AddToScheme(scheme))
+	utilruntime.Must(meshapi.AddToScheme(scheme))
 }
 
 type Options struct {
@@ -110,6 +115,31 @@ var featureGatesHandlers = map[string]FeatureGateHandler{
 			Deployment: deployment.NewDeployment(mgr.GetClient()),
 			Service:    service.NewService(mgr.GetClient()),
 			ConfigMap:  configmap.NewConfigMap(mgr.GetClient()),
+		}).SetupWithManager(mgr); err != nil {
+			logger.Error(err, "unable to create controller", "controller", "ComputeNode")
+			return err
+		}
+		return nil
+	},
+	"Cluster": func(mgr manager.Manager) error {
+		if err := (&controllers.ClusterReconciler{
+			Client:      mgr.GetClient(),
+			Scheme:      mgr.GetScheme(),
+			Log:         mgr.GetLogger(),
+			ComputeNode: computenode.NewComputeNode(mgr.GetClient()),
+			StorageNode: storagenode.NewStorageNode(mgr.GetClient()),
+		}).SetupWithManager(mgr); err != nil {
+			logger.Error(err, "unable to create controller", "controller", "ComputeNode")
+			return err
+		}
+		return nil
+	},
+	"StorageNode": func(mgr manager.Manager) error {
+		if err := (&controllers.StorageNodeReconciler{
+			Client: mgr.GetClient(),
+			Scheme: mgr.GetScheme(),
+			Log:    mgr.GetLogger(),
+			AWSRds: aws.NewRdsClient(),
 		}).SetupWithManager(mgr); err != nil {
 			logger.Error(err, "unable to create controller", "controller", "ComputeNode")
 			return err
