@@ -41,5 +41,9 @@ type StorageNode struct {
 }
 
 type StorageNodeSpec struct {
-	DatabaseClass string
+	DatabaseClassName string `json:"databaseClassName,omitempty"`
+}
+
+func init() {
+	SchemeBuilder.Register(&StorageNode{}, &StorageNodeList{})
 }

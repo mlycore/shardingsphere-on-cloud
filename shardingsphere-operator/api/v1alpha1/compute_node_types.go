@@ -213,11 +213,11 @@ type StorageNodeConnector struct {
 // BootstrapConfig is used for any ShardingSphere Proxy startup
 type BootstrapConfig struct {
 	// +optional
-	ServerConfig ServerConfig `json:"serverConfig,omitempty"`
+	ServerConfig *ServerConfig `json:"serverConfig,omitempty"`
 	// +optional
-	LogbackConfig LogbackConfig `json:"logbackConfig,omitempty"`
+	LogbackConfig *LogbackConfig `json:"logbackConfig,omitempty"`
 	// +optional
-	AgentConfig AgentConfig `json:"agentConfig,omitempty"`
+	AgentConfig *AgentConfig `json:"agentConfig,omitempty"`
 }
 
 type PortBinding struct {
@@ -283,7 +283,7 @@ type ComputeNodeSpec struct {
 	ServiceType corev1.ServiceType `json:"serviceType,omitempty" yaml:"serviceType"`
 
 	// +optional
-	Bootstrap BootstrapConfig `json:"bootstrap,omitempty"`
+	Bootstrap *BootstrapConfig `json:"bootstrap,omitempty"`
 }
 
 // ComputeNodeStatus defines the observed state of ShardingSphere Proxy

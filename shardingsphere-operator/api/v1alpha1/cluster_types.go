@@ -44,13 +44,18 @@ type Cluster struct {
 }
 
 type ClusterSpec struct {
-	Encryption EncryptRule
-	Topology   ClusterTopology
+	Schemas []Schema `json:"schemas"`
+}
+
+type Schema struct {
+	Name       string          `json:"name"`
+	Encryption EncryptRule     `json:"encryption"`
+	Topology   ClusterTopology `json:"topology"`
 }
 
 type ClusterTopology struct {
-	ComputeNode ComputeNodeSpec
-	StorageNode StorageNodeSpec
+	ComputeNode ComputeNodeSpec `json:"computeNode"`
+	StorageNode StorageNodeSpec `json:"storageNode"`
 }
 
 // type CreateEncryptRule struct {
@@ -63,16 +68,16 @@ type ClusterTopology struct {
 
 type EncryptRule struct {
 	// ifNotExists
-	// IfNotExist IfNotExists
+	IfNotExists IfNotExists `json:"ifNotExists,omitempty"`
 	// IfNotExist bool
 	// encryptDefinition
-	// EncryptDefinitions EncryptDefinitionList
+	EncryptDefinitions EncryptDefinitionList `json:"encryptDefinitions"`
 }
 
 func (t *EncryptRule) ToDistSQL() string {
 	var stmt string
-	if t.IfNotExist {
-		stmt = fmt.Sprintf("%s", t.IfNotExist.ToDistSQL())
+	if t.IfNotExists {
+		stmt = fmt.Sprintf("%s", t.IfNotExists.ToDistSQL())
 	}
 	stmt = fmt.Sprintf("%s %s;", stmt, t.EncryptDefinitions.ToDistSQL())
 
@@ -98,11 +103,11 @@ func (t IfNotExists) ToDistSQL() string {
 
 type EncryptDefinition struct {
 	// name
-	Name string
+	Name string `json:"name"`
 	// columns
-	Columns ColumnList
+	Columns ColumnList `json:"columns"`
 	// queryWithCipheColumn
-	QueryWithCipherColumn QueryWithCipherColumn
+	QueryWithCipherColumn QueryWithCipherColumn `json:"queryWithCipherColumn"`
 }
 
 func (t *EncryptDefinition) ToDistSQL() string {
@@ -124,21 +129,21 @@ func (t *ColumnList) ToDistSQL() string {
 
 type Column struct {
 	// columnName
-	Name Name
+	Name Name `json:"name"`
 	// plainColumnName
-	Plain Plain
+	Plain Plain `json:"plain,omitempty"`
 	// cipherColumnName
-	Cipher Cipher
+	Cipher Cipher `json:"cipher,omitempty"`
 	// assistedQueryColumnName
-	AssistedQueryColumn AssistedQueryColumn
+	AssistedQueryColumn AssistedQueryColumn `json:"assistedQueryColumn,omitempty"`
 	// likeQueryColumnName
-	LikeQueryColumn LikeQueryColumn
+	LikeQueryColumn LikeQueryColumn `json:"likeQueryColumn,omitempty"`
 	// encryptAlgorithmDefinition
-	EncryptionAlgorithm *EncryptionAlgorithmType
+	EncryptionAlgorithm *EncryptionAlgorithmType `json:"encryptionAlgorithm,omitempty"`
 	// assistedQueryAlgorithmDefinition
-	AssistedQueryAlgorithm *AssistedQueryAlgorithmType
+	AssistedQueryAlgorithm *AssistedQueryAlgorithmType `json:"assistedQueryAlgorithm,omitempty"`
 	// likeQueryAlgorithmDefinition
-	LikeQueryAlgorithm *LikeQueryAlgorithmType
+	LikeQueryAlgorithm *LikeQueryAlgorithmType `json:"likeQueryAlgorithm,omitempty"`
 }
 
 func (t *Column) ToDistSQL() string {
@@ -201,33 +206,39 @@ func (t *LikeQueryColumn) ToDistSQL() string {
 	return fmt.Sprintf("LIKE_QUERY_COLUMN=%s", *t)
 }
 
-type EncryptionAlgorithmType struct {
-	AlgorithmType
-}
+// type EncryptionAlgorithmType struct {
+// 	*AlgorithmType
+// }
+
+type EncryptionAlgorithmType AlgorithmType
 
 func (r *EncryptionAlgorithmType) ToDistSQL() string {
-	return fmt.Sprintf("ENCRYPT_ALGORITHM(%s)", r.AlgorithmType.ToDistSQL())
+	return fmt.Sprintf("ENCRYPT_ALGORITHM(%s)", r.ToDistSQL())
 }
 
-type AssistedQueryAlgorithmType struct {
-	AlgorithmType
-}
+// type AssistedQueryAlgorithmType struct {
+// 	*AlgorithmType
+// }
+
+type AssistedQueryAlgorithmType AlgorithmType
 
 func (r *AssistedQueryAlgorithmType) ToDistSQL() string {
-	return fmt.Sprintf("ASSISTED_QUERY_ALGORITHM(%s)", r.AlgorithmType.ToDistSQL())
+	return fmt.Sprintf("ASSISTED_QUERY_ALGORITHM(%s)", r.ToDistSQL())
 }
 
-type LikeQueryAlgorithmType struct {
-	AlgorithmType
-}
+// type LikeQueryAlgorithmType struct {
+// 	*AlgorithmType
+// }
+
+type LikeQueryAlgorithmType AlgorithmType
 
 func (r *LikeQueryAlgorithmType) ToDistSQL() string {
-	return fmt.Sprintf("LIKE_QUERY_ALGORITHM(%s)", r.AlgorithmType.ToDistSQL())
+	return fmt.Sprintf("LIKE_QUERY_ALGORITHM(%s)", r.ToDistSQL())
 }
 
 type AlgorithmType struct {
-	Name       string
-	Properties Properties
+	Name       string     `json:"name"`
+	Properties Properties `json:"properties,omitempty"`
 }
 
 func (t *AlgorithmType) ToDistSQL() string {
@@ -240,8 +251,6 @@ func (t *AlgorithmType) ToDistSQL() string {
 
 	return fmt.Sprintf("TYPE(%s)", stmt)
 }
-
-type Properties map[string]string
 
 func (t *Properties) ToDistSQL() string {
 	var stmt string
@@ -264,4 +273,8 @@ func (t *QueryWithCipherColumn) ToDistSQL() string {
 	} else {
 		return "QUERY_ WITH_CIPHER_COLUMN=false"
 	}
+}
+
+func init() {
+	SchemeBuilder.Register(&Cluster{}, &ClusterList{})
 }
