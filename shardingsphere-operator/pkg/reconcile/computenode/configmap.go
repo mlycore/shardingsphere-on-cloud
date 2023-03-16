@@ -19,7 +19,6 @@ package computenode
 
 import (
 	"encoding/json"
-	"reflect"
 
 	"github.com/apache/shardingsphere-on-cloud/shardingsphere-operator/api/v1alpha1"
 	"gopkg.in/yaml.v2"
@@ -51,7 +50,8 @@ func NewConfigMap(cn *v1alpha1.ComputeNode) *v1.ConfigMap {
 	}
 
 	// NOTE: ShardingSphere Proxy 5.3.0 needs a server.yaml no matter if it is empty
-	if !reflect.DeepEqual(cn.Spec.Bootstrap.ServerConfig, v1alpha1.ServerConfig{}) {
+	// if !reflect.DeepEqual(cn.Spec.Bootstrap.ServerConfig, v1alpha1.ServerConfig{}) {
+	if cn.Spec.Bootstrap != nil && cn.Spec.Bootstrap.ServerConfig != nil {
 		servconf := cn.Spec.Bootstrap.ServerConfig.DeepCopy()
 		if cn.Spec.Bootstrap.ServerConfig.Mode.Type == v1alpha1.ModeTypeCluster {
 			if len(cluster) > 0 {
@@ -66,7 +66,8 @@ func NewConfigMap(cn *v1alpha1.ComputeNode) *v1.ConfigMap {
 	}
 
 	// load java agent config to configmap if needed
-	if !reflect.DeepEqual(cn.Spec.Bootstrap.AgentConfig, v1alpha1.AgentConfig{}) {
+	// if !reflect.DeepEqual(cn.Spec.Bootstrap.AgentConfig, v1alpha1.AgentConfig{}) {
+	if cn.Spec.Bootstrap != nil && cn.Spec.Bootstrap.AgentConfig != nil {
 		agentConf := cn.Spec.Bootstrap.AgentConfig.DeepCopy()
 		if y, err := yaml.Marshal(agentConf); err == nil {
 			builder.SetAgentConfig(string(y))
