@@ -129,7 +129,7 @@ var featureGatesHandlers = map[string]FeatureGateHandler{
 			ComputeNode: computenode.NewComputeNode(mgr.GetClient()),
 			StorageNode: storagenode.NewStorageNode(mgr.GetClient()),
 		}).SetupWithManager(mgr); err != nil {
-			logger.Error(err, "unable to create controller", "controller", "ComputeNode")
+			logger.Error(err, "unable to create controller", "controller", "Cluster")
 			return err
 		}
 		return nil
@@ -141,7 +141,7 @@ var featureGatesHandlers = map[string]FeatureGateHandler{
 			Log:    mgr.GetLogger(),
 			AWSRds: aws.NewRdsClient(),
 		}).SetupWithManager(mgr); err != nil {
-			logger.Error(err, "unable to create controller", "controller", "ComputeNode")
+			logger.Error(err, "unable to create controller", "controller", "StorageNode")
 			return err
 		}
 		return nil
