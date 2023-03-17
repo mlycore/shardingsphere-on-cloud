@@ -33,6 +33,9 @@ type ClusterList struct {
 }
 
 // +kubebuilder:object:root=true
+// +kubebuilder:printcolumn:JSONPath=".status.service",name="Service",type=string
+// +kubebuilder:printcolumn:JSONPath=".metadata.creationTimestamp",name=Age,type=date
+// +kubebuilder:subresource:status
 // ComputeNode is the Schema for the ShardingSphere Proxy API
 type Cluster struct {
 	metav1.TypeMeta   `json:",inline"`
@@ -40,11 +43,16 @@ type Cluster struct {
 
 	Spec ClusterSpec `json:"spec,omitempty"`
 	// +optional
-	// Status ClusterStatus `json:"status,omitempty"`
+	Status ClusterStatus `json:"status,omitempty"`
 }
 
 type ClusterSpec struct {
 	Schemas []Schema `json:"schemas"`
+}
+
+type ClusterStatus struct {
+	// +optional
+	Service string `json:"service"`
 }
 
 type Schema struct {

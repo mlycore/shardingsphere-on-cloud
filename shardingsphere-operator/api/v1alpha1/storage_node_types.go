@@ -29,7 +29,13 @@ type StorageNodeList struct {
 	Items           []StorageNode `json:"items"`
 }
 
+// +kubebuilder:printcolumn:JSONPath=".status.endpoints[*].address",name="Address",type=string
+// +kubebuilder:printcolumn:JSONPath=".status.endpoints[*].port",name="Port",type=integer
+// +kubebuilder:printcolumn:JSONPath=".status.endpoints[*].status",name="Status",type=string
+// +kubebuilder:printcolumn:JSONPath=".status.endpoints[*].arn",name="ARN",type=string
+// +kubebuilder:printcolumn:JSONPath=".metadata.creationTimestamp",name=Age,type=date
 // +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
 // StorageNode is the Schema for the ShardingSphere Proxy API
 type StorageNode struct {
 	metav1.TypeMeta   `json:",inline"`
@@ -37,11 +43,27 @@ type StorageNode struct {
 
 	Spec StorageNodeSpec `json:"spec,omitempty"`
 	// +optional
-	// Status StorageNodeStatus `json:"status,omitempty"`
+	Status StorageNodeStatus `json:"status,omitempty"`
 }
 
 type StorageNodeSpec struct {
 	DatabaseClassName string `json:"databaseClassName,omitempty"`
+}
+
+type StorageNodeStatus struct {
+	// +optional
+	Endpoints []Endpoint `json:"endpoints,omitempty"`
+}
+
+type Endpoint struct {
+	Arn      string `json:"arn"`
+	Protocol string `json:"protocol"`
+	Address  string `json:"address"`
+	Port     uint32 `json:"port"`
+	Status   string `json:"status"`
+	User     string `json:"user"`
+	//FIXME
+	Pass string `json:"pass"`
 }
 
 func init() {
