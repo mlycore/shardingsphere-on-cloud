@@ -20,12 +20,15 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/apache/shardingsphere-on-cloud/shardingsphere-operator/api/v1alpha1"
 	"github.com/apache/shardingsphere-on-cloud/shardingsphere-operator/pkg/kubernetes/computenode"
 	"github.com/apache/shardingsphere-on-cloud/shardingsphere-operator/pkg/kubernetes/storagenode"
 	reconcile "github.com/apache/shardingsphere-on-cloud/shardingsphere-operator/pkg/reconcile/cluster"
 	"github.com/go-logr/logr"
+	"github.com/jinzhu/gorm"
+	_ "github.com/jinzhu/gorm/dialects/mysql"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -59,7 +62,6 @@ func (r *ClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	logger := r.Log.WithValues(clusterControllerName, req.NamespacedName)
 
 	clu := &v1alpha1.Cluster{}
-
 	if err := r.Get(ctx, req.NamespacedName, clu); err != nil {
 		if apierrors.IsNotFound(err) {
 			return ctrl.Result{RequeueAfter: defaultRequeueTime}, nil
@@ -79,18 +81,18 @@ func (r *ClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		errors = append(errors, err)
 	}
 
-	if err := r.executeDistSQL(ctx, clu); err != nil {
-		logger.Error(err, "execute DistSQL")
-		errors = append(errors, err)
-	}
-
 	if len(errors) != 0 {
 		return ctrl.Result{Requeue: true}, errors[0]
 	}
 
-	// if err := r.reconcileStatus(ctx, clu); err != nil {
-	// 	logger.Error(err, "reconcile status")
-	// }
+	if err := r.executeDistSQL(ctx, clu, &clu.Spec.Schemas[0]); err != nil {
+		logger.Error(err, "execute DistSQL")
+		return ctrl.Result{RequeueAfter: 30}, err
+	}
+
+	if err := r.reconcileStatus(ctx, clu); err != nil {
+		logger.Error(err, "reconcile status")
+	}
 
 	return ctrl.Result{RequeueAfter: defaultRequeueTime}, nil
 }
@@ -211,6 +213,136 @@ func (r *ClusterReconciler) createStorageNode(ctx context.Context, cluster *v1al
 	return nil
 }
 
-func (r *ClusterReconciler) executeDistSQL(ctx context.Context, schema *v1alpha1.Schema) error {
+func (r *ClusterReconciler) executeDistSQL(ctx context.Context, cluster *v1alpha1.Cluster, schema *v1alpha1.Schema) error {
+	sn, ok, err := r.getStorageNodeByNamespacedName(ctx, types.NamespacedName{
+		Namespace: cluster.Namespace,
+		Name:      fmt.Sprintf("%s-%s", cluster.Name, schema.Name),
+	})
+	if err != nil {
+		return err
+	}
+	if ok {
+		var available bool
+		for _, ep := range sn.Status.Endpoints {
+			if strings.ToLower(ep.Status) != "available" {
+				available = false
+				return nil
+			}
+		}
+		if available {
+			r.Log.Info("available")
+			if err := r.createSchema(ctx, cluster, schema.Name); err != nil {
+				r.Log.Error(err, "create schema")
+				return err
+			}
+			if err := r.registerStorageUnits(ctx, cluster, schema.Name, sn); err != nil {
+				r.Log.Error(err, "register storage units")
+				return err
+			}
+			if err := r.createEncryption(ctx, cluster, schema.Name); err != nil {
+				r.Log.Error(err, "create encryption")
+				return err
+			}
 
+		}
+	}
+
+	// following steps move to cluster controller
+	// 2. create logical database if not exists
+	// 3. using logical database
+	// 4. register storage node
+	// 5. create encrypt rule
+	return nil
+}
+
+func (r *ClusterReconciler) createSchema(ctx context.Context, cluster *v1alpha1.Cluster, schema string) error {
+	var (
+		dialects string = "mysql"
+		user     string = "root"
+		pass     string = "root"
+		host     string = fmt.Sprintf("%s:3307", cluster.Status.Service)
+		database string = schema
+	)
+	dbconn, err := gorm.Open(dialects, fmt.Sprintf("%s:%s@(%s)/%s?charset=utf8&parseTime=True&loc=Local", user, pass, host, database))
+	if err != nil {
+		return err
+	}
+	dbconn.LogMode(true)
+	if dbconn.Raw(fmt.Sprintf("CREATE DATABASE %s", schema)).Error != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (r *ClusterReconciler) registerStorageUnits(ctx context.Context, cluster *v1alpha1.Cluster, schema string, sn *v1alpha1.StorageNode) error {
+	var (
+		dialects string = "mysql"
+		user     string = "root"
+		pass     string = "root"
+		host     string = fmt.Sprintf("%s:3307", cluster.Status.Service)
+		database string = schema
+	)
+	dbconn, err := gorm.Open(dialects, fmt.Sprintf("%s:%s@(%s)/%s?charset=utf8&parseTime=True&loc=Local", user, pass, host, database))
+	if err != nil {
+		return err
+	}
+	dbconn.LogMode(true)
+	ds0 := fmt.Sprintf("HOST=%s,PORT=%d,DB=%s,USER=%s,PASSWORD=%s", sn.Status.Endpoints[0].Address, sn.Status.Endpoints[0].Port, schema, sn.Status.Endpoints[0].User, sn.Status.Endpoints[0].Pass)
+	ds1 := fmt.Sprintf("HOST=%s,PORT=%d,DB=%s,USER=%s,PASSWORD=%s", sn.Status.Endpoints[1].Address, sn.Status.Endpoints[1].Port, schema, sn.Status.Endpoints[1].User, sn.Status.Endpoints[1].Pass)
+	if dbconn.Raw(fmt.Sprintf("USE %s; REGISTER STORAGE UNITS IF NOT EXISTS ds_0(%s),ds_1(%s);", schema, ds0, ds1)).Error != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (r *ClusterReconciler) createEncryption(ctx context.Context, cluster *v1alpha1.Cluster, schema string) error {
+	var (
+		dialects string = "mysql"
+		user     string = "root"
+		pass     string = "root"
+		host     string = fmt.Sprintf("%s:3307", cluster.Status.Service)
+		database string = schema
+	)
+	distsql := cluster.Spec.Schemas[0].Encryption.ToDistSQL()
+	dbconn, err := gorm.Open(dialects, fmt.Sprintf("%s:%s@(%s)/%s?charset=utf8&parseTime=True&loc=Local", user, pass, host, database))
+	if err != nil {
+		return err
+	}
+	dbconn.LogMode(true)
+	if dbconn.Raw(fmt.Sprintf("USE %s; %s", schema, distsql)).Error != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (r *ClusterReconciler) reconcileStatus(ctx context.Context, cluster *v1alpha1.Cluster) error {
+	cn, ok, err := r.getComputeNodeByNamespacedName(ctx, types.NamespacedName{
+		Namespace: cluster.Namespace,
+		Name:      fmt.Sprintf("%s-%s", cluster.Name, cluster.Spec.Schemas[0].Name),
+	})
+	if err != nil {
+		r.Log.Error(err, "get computenode")
+		return err
+	}
+
+	if ok {
+		rt := &v1alpha1.Cluster{}
+		if err := r.Get(ctx, types.NamespacedName{
+			Namespace: cluster.Namespace,
+			Name:      cluster.Name,
+		}, rt); err != nil {
+			r.Log.Error(err, "get runtime cluster")
+			return err
+		}
+
+		rt.Status.Service = fmt.Sprintf("%s.%s", cn.Name, cn.Namespace)
+		if err := r.Status().Update(ctx, rt); err != nil {
+			r.Log.Error(err, "update cluster status")
+			return err
+		}
+	}
+	return nil
 }

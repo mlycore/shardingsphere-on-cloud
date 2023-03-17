@@ -49,7 +49,7 @@ type StorageNodeReconciler struct {
 
 func (r *StorageNodeReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&v1alpha1.Cluster{}).
+		For(&v1alpha1.StorageNode{}).
 		Complete(r)
 }
 
@@ -69,7 +69,6 @@ func (r *StorageNodeReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	logger.Info("storagenode found")
 	if err := r.reconcileDatabaseClass(ctx, sn); err != nil {
 		return ctrl.Result{Requeue: true}, err
-
 	}
 
 	return ctrl.Result{RequeueAfter: defaultRequeueTime}, nil
@@ -109,8 +108,8 @@ func (r *StorageNodeReconciler) reconcileAWSRdsCluster(ctx context.Context, clas
 	subnetGroupName := sn.Annotations[meshapi.AnnotationsSubnetGroupName]
 	vpcSecurityGroupIds := sn.Annotations[meshapi.AnnotationsVPCSecurityGroupIds]
 	availabilityZones := sn.Annotations[meshapi.AnnotationsAvailabilityZones]
-	randompass := random.String()
-	rdsDesc, err := r.AWSRds.Cluster().SetDBClusterIdentifier(sn.Name).Describe(ctx)
+	randompass := random.StringN(8)
+	desc, err := r.AWSRds.Cluster().SetDBClusterIdentifier(sn.Name).Describe(ctx)
 	if err != nil {
 		if strings.Contains(err.Error(), "DBClusterNotFound") {
 			if err := r.AWSRds.Cluster().
@@ -122,7 +121,7 @@ func (r *StorageNodeReconciler) reconcileAWSRdsCluster(ctx context.Context, clas
 				SetDBClusterInstanceClass(class.Spec.Instance.Class).
 				//NOTE
 				// SetDatabaseName(svc.DatabaseMySQL.DB).
-				SetDatabaseName("test-crd").
+				SetDatabaseName("ssdb").
 				SetAllocatedStorage(100).
 				SetVpcSecurityGroupIds(strings.Split(vpcSecurityGroupIds, ",")).
 				SetStorageType("io1").
@@ -132,20 +131,52 @@ func (r *StorageNodeReconciler) reconcileAWSRdsCluster(ctx context.Context, clas
 				SetPublicAccessible(class.Spec.PubliclyAccessible).
 				// SetAllocatedStorage(class.Spec.Storage.AllocatedStorage).
 				Create(ctx); err != nil {
+				r.Log.Error(err, "desc rds cluster creat")
 				return err
 			}
 			return nil
 		}
+		r.Log.Error(err, "desc rds cluster other")
 		return err
 	}
 
 	//TODO: check available then distsql
 	// 1. make sure it is available and set storage node status
-	// following steps move to cluster controller
-	// 2. create logical database if not exists
-	// 3. using logical database
-	// 4. register storage node
-	// 5. create encrypt rule
+	if desc != nil {
+		pe := v1alpha1.Endpoint{
+			Protocol: "MySQL",
+			Address:  desc.PrimaryEndpoint,
+			Port:     uint32(desc.Port),
+			Status:   desc.Status,
+			Arn:      desc.DBClusterArn,
+		}
+
+		re := v1alpha1.Endpoint{
+			Protocol: "MySQL",
+			Address:  desc.ReaderEndpoint,
+			Port:     uint32(desc.Port),
+			Status:   desc.Status,
+			Arn:      desc.DBClusterArn,
+		}
+
+		rt := &v1alpha1.StorageNode{}
+		if err := r.Get(ctx, types.NamespacedName{
+			Namespace: sn.Namespace,
+			Name:      sn.Name,
+		}, rt); err != nil {
+			return err
+		}
+
+		if rt.Status.Endpoints == nil {
+			rt.Status.Endpoints = []v1alpha1.Endpoint{}
+		}
+		rt.Status.Endpoints = []v1alpha1.Endpoint{pe, re}
+
+		if err := r.Status().Update(ctx, rt); err != nil {
+			r.Log.Error(err, "update storagenode status")
+			return err
+		}
+	}
 
 	return nil
 }

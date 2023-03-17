@@ -124,7 +124,7 @@ type ContainerBuilder interface {
 	SetName(name string) ContainerBuilder
 	SetImage(image string) ContainerBuilder
 	SetPorts(ports []corev1.ContainerPort) ContainerBuilder
-	SetResources(res corev1.ResourceRequirements) ContainerBuilder
+	SetResources(res v1alpha1.ResourceRequirements) ContainerBuilder
 	SetLivenessProbe(probe *corev1.Probe) ContainerBuilder
 	SetReadinessProbe(probe *corev1.Probe) ContainerBuilder
 	SetStartupProbe(probe *corev1.Probe) ContainerBuilder
@@ -164,8 +164,9 @@ func (c *containerBuilder) SetPorts(ports []corev1.ContainerPort) ContainerBuild
 	return c
 }
 
-func (c *containerBuilder) SetResources(res corev1.ResourceRequirements) ContainerBuilder {
-	c.container.Resources = res
+func (c *containerBuilder) SetResources(res v1alpha1.ResourceRequirements) ContainerBuilder {
+	c.container.Resources.Limits = res.Limits
+	c.container.Resources.Requests = res.Requests
 	return c
 }
 
