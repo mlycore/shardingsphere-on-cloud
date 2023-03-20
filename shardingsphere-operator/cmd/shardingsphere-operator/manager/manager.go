@@ -23,7 +23,7 @@ import (
 
 	"github.com/apache/shardingsphere-on-cloud/shardingsphere-operator/pkg/metrics"
 
-	"github.com/apache/shardingsphere-on-cloud/shardingsphere-operator/pkg/controllers"
+	// "github.com/apache/shardingsphere-on-cloud/shardingsphere-operator/pkg/controllers"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -47,22 +47,24 @@ func SetupWithOptions(opts *Options) *Manager {
 		os.Exit(1)
 	}
 
-	if err = (&controllers.ProxyReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-		Log:    mgr.GetLogger(),
-	}).SetupWithManager(mgr); err != nil {
-		logger.Error(err, "unable to create controller", "controller", "ShardingSphereProxy")
-		os.Exit(1)
-	}
-	if err = (&controllers.ProxyConfigReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-		Log:    mgr.GetLogger(),
-	}).SetupWithManager(mgr); err != nil {
-		logger.Error(err, "unable to create controller", "controller", "ShardingSphereProxyServerConfig")
-		os.Exit(1)
-	}
+	/*
+		if err = (&controllers.ProxyReconciler{
+			Client: mgr.GetClient(),
+			Scheme: mgr.GetScheme(),
+			Log:    mgr.GetLogger(),
+		}).SetupWithManager(mgr); err != nil {
+			logger.Error(err, "unable to create controller", "controller", "ShardingSphereProxy")
+			os.Exit(1)
+		}
+		if err = (&controllers.ProxyConfigReconciler{
+			Client: mgr.GetClient(),
+			Scheme: mgr.GetScheme(),
+			Log:    mgr.GetLogger(),
+		}).SetupWithManager(mgr); err != nil {
+			logger.Error(err, "unable to create controller", "controller", "ShardingSphereProxyServerConfig")
+			os.Exit(1)
+		}
+	*/
 
 	// feature gates handling
 	handlers := opts.ParseFeatureGates()
