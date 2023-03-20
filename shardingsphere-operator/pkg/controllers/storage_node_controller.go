@@ -25,7 +25,6 @@ import (
 	"github.com/apache/shardingsphere-on-cloud/shardingsphere-operator/api/v1alpha1"
 	"github.com/database-mesh/golang-sdk/aws/client/rds"
 	meshapi "github.com/database-mesh/golang-sdk/kubernetes/api/v1alpha1"
-	"github.com/database-mesh/golang-sdk/pkg/random"
 	"github.com/go-logr/logr"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -108,7 +107,8 @@ func (r *StorageNodeReconciler) reconcileAWSRdsCluster(ctx context.Context, clas
 	subnetGroupName := sn.Annotations[meshapi.AnnotationsSubnetGroupName]
 	vpcSecurityGroupIds := sn.Annotations[meshapi.AnnotationsVPCSecurityGroupIds]
 	availabilityZones := sn.Annotations[meshapi.AnnotationsAvailabilityZones]
-	randompass := random.StringN(8)
+	// randompass := random.StringN(8)
+	randompass := "ShardingSphere123"
 	desc, err := r.AWSRds.Cluster().SetDBClusterIdentifier(sn.Name).Describe(ctx)
 	if err != nil {
 		if strings.Contains(err.Error(), "DBClusterNotFound") {
@@ -149,6 +149,8 @@ func (r *StorageNodeReconciler) reconcileAWSRdsCluster(ctx context.Context, clas
 			Port:     uint32(desc.Port),
 			Status:   desc.Status,
 			Arn:      desc.DBClusterArn,
+			User:     class.Spec.DefaultMasterUsername,
+			Pass:     randompass,
 		}
 
 		re := v1alpha1.Endpoint{
@@ -157,6 +159,8 @@ func (r *StorageNodeReconciler) reconcileAWSRdsCluster(ctx context.Context, clas
 			Port:     uint32(desc.Port),
 			Status:   desc.Status,
 			Arn:      desc.DBClusterArn,
+			User:     class.Spec.DefaultMasterUsername,
+			Pass:     randompass,
 		}
 
 		rt := &v1alpha1.StorageNode{}

@@ -19,7 +19,9 @@ package controllers
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/apache/shardingsphere-on-cloud/shardingsphere-operator/api/v1alpha1"
@@ -27,8 +29,10 @@ import (
 	"github.com/apache/shardingsphere-on-cloud/shardingsphere-operator/pkg/kubernetes/storagenode"
 	reconcile "github.com/apache/shardingsphere-on-cloud/shardingsphere-operator/pkg/reconcile/cluster"
 	"github.com/go-logr/logr"
-	"github.com/jinzhu/gorm"
-	_ "github.com/jinzhu/gorm/dialects/mysql"
+
+	// "github.com/jinzhu/gorm"
+	// _ "github.com/jinzhu/gorm/dialects/mysql"
+	_ "github.com/go-sql-driver/mysql"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -82,7 +86,8 @@ func (r *ClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}
 
 	if len(errors) != 0 {
-		return ctrl.Result{Requeue: true}, errors[0]
+		// return ctrl.Result{Requeue: true}, errors[0]
+		return ctrl.Result{RequeueAfter: 3}, errors[0]
 	}
 
 	if err := r.executeDistSQL(ctx, clu, &clu.Spec.Schemas[0]); err != nil {
@@ -221,29 +226,38 @@ func (r *ClusterReconciler) executeDistSQL(ctx context.Context, cluster *v1alpha
 	if err != nil {
 		return err
 	}
+
+	r.Log.Info("execute distsql")
+
 	if ok {
-		var available bool
+		var available bool = true
+		if len(sn.Status.Endpoints) == 0 {
+			available = false
+		}
 		for _, ep := range sn.Status.Endpoints {
 			if strings.ToLower(ep.Status) != "available" {
 				available = false
 				return nil
 			}
 		}
+		r.Log.Info("available?")
 		if available {
 			r.Log.Info("available")
 			if err := r.createSchema(ctx, cluster, schema.Name); err != nil {
 				r.Log.Error(err, "create schema")
+				os.Exit(1)
 				return err
 			}
 			if err := r.registerStorageUnits(ctx, cluster, schema.Name, sn); err != nil {
 				r.Log.Error(err, "register storage units")
+				os.Exit(1)
 				return err
 			}
 			if err := r.createEncryption(ctx, cluster, schema.Name); err != nil {
 				r.Log.Error(err, "create encryption")
+				os.Exit(1)
 				return err
 			}
-
 		}
 	}
 
@@ -255,20 +269,40 @@ func (r *ClusterReconciler) executeDistSQL(ctx context.Context, cluster *v1alpha
 	return nil
 }
 
+func hookHostFromEnv(host string) string {
+	if debug := os.Getenv("SS_OPERATOR_DEBUG"); debug == "ON" {
+		host = fmt.Sprintf("%s:3307", os.Getenv("SS_OPERATOR_COMPUTENODE_SVC"))
+	}
+	return host
+}
+
 func (r *ClusterReconciler) createSchema(ctx context.Context, cluster *v1alpha1.Cluster, schema string) error {
 	var (
 		dialects string = "mysql"
 		user     string = "root"
 		pass     string = "root"
 		host     string = fmt.Sprintf("%s:3307", cluster.Status.Service)
-		database string = schema
+		// database string = schema
 	)
-	dbconn, err := gorm.Open(dialects, fmt.Sprintf("%s:%s@(%s)/%s?charset=utf8&parseTime=True&loc=Local", user, pass, host, database))
+
+	host = hookHostFromEnv(host)
+
+	// dbconn, err := gorm.Open(dialects, fmt.Sprintf("%s:%s@(%s)", user, pass, host))
+	// if err != nil {
+	// 	return err
+	// }
+
+	// dbconn.LogMode(true)
+	// if dbconn.Raw(fmt.Sprintf("CREATE DATABASE %s", schema)).Error != nil {
+	// 	return err
+	// }
+
+	dbconn, err := sql.Open(dialects, fmt.Sprintf("%s:%s@(%s)/", user, pass, host))
 	if err != nil {
 		return err
 	}
-	dbconn.LogMode(true)
-	if dbconn.Raw(fmt.Sprintf("CREATE DATABASE %s", schema)).Error != nil {
+
+	if _, err := dbconn.Exec(fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s", schema)); err != nil {
 		return err
 	}
 
@@ -283,18 +317,57 @@ func (r *ClusterReconciler) registerStorageUnits(ctx context.Context, cluster *v
 		host     string = fmt.Sprintf("%s:3307", cluster.Status.Service)
 		database string = schema
 	)
-	dbconn, err := gorm.Open(dialects, fmt.Sprintf("%s:%s@(%s)/%s?charset=utf8&parseTime=True&loc=Local", user, pass, host, database))
+
+	host = hookHostFromEnv(host)
+
+	// dbconn, err := gorm.Open(dialects, fmt.Sprintf("%s:%s@(%s)/%s?charset=utf8&parseTime=True&loc=Local", user, pass, host, database))
+	// if err != nil {
+	// 	return err
+	// }
+	// dbconn.LogMode(true)
+
+	ds0 := fmt.Sprintf("HOST=\"%s\",PORT=%d,DB=\"%s\",USER=\"%s\",PASSWORD=\"%s\"", sn.Status.Endpoints[0].Address, sn.Status.Endpoints[0].Port, schema, sn.Status.Endpoints[0].User, sn.Status.Endpoints[0].Pass)
+	// ds1 := fmt.Sprintf("HOST=\"%s\",PORT=%d,DB=\"%s\",USER=\"%s\",PASSWORD=\"%s\"", sn.Status.Endpoints[1].Address, sn.Status.Endpoints[1].Port, schema, sn.Status.Endpoints[1].User, sn.Status.Endpoints[1].Pass)
+	dbconn, err := sql.Open(dialects, fmt.Sprintf("%s:%s@(%s)/%s", user, pass, host, database))
 	if err != nil {
 		return err
 	}
-	dbconn.LogMode(true)
-	ds0 := fmt.Sprintf("HOST=%s,PORT=%d,DB=%s,USER=%s,PASSWORD=%s", sn.Status.Endpoints[0].Address, sn.Status.Endpoints[0].Port, schema, sn.Status.Endpoints[0].User, sn.Status.Endpoints[0].Pass)
-	ds1 := fmt.Sprintf("HOST=%s,PORT=%d,DB=%s,USER=%s,PASSWORD=%s", sn.Status.Endpoints[1].Address, sn.Status.Endpoints[1].Port, schema, sn.Status.Endpoints[1].User, sn.Status.Endpoints[1].Pass)
-	if dbconn.Raw(fmt.Sprintf("USE %s; REGISTER STORAGE UNITS IF NOT EXISTS ds_0(%s),ds_1(%s);", schema, ds0, ds1)).Error != nil {
+	// if dbconn.Raw(fmt.Sprintf("USE %s; REGISTER STORAGE UNITS IF NOT EXISTS ds_0(%s),ds_1(%s);", schema, ds0, ds1)).Error != nil {
+	// 	return err
+	// }
+	// s := fmt.Sprintf("USE %s; REGISTER STORAGE UNIT IF NOT EXISTS ds_0(%s),ds_1(%s);", schema, ds0, ds1)
+	// s := fmt.Sprintf("REGISTER STORAGE UNIT IF NOT EXISTS ds_0(%s),ds_1(%s);", ds0, ds1)
+	s := fmt.Sprintf("REGISTER STORAGE UNIT IF NOT EXISTS ds_0(%s);", ds0)
+	fmt.Printf("register storagenode: sql: %s\n", s)
+	if _, err := dbconn.Exec(s); err != nil {
 		return err
 	}
 
 	return nil
+}
+
+func check(e v1alpha1.EncryptRule) {
+	fmt.Printf("encrypt rule: %#v\n", e)
+	for _, ed := range e.EncryptDefinitions {
+		fmt.Printf("name: %s, columns: %d\n", ed.Name, len(ed.Columns))
+		for i := range ed.Columns {
+			// fmt.Printf("column: %s\n", c.ToDistSQL())
+			fmt.Printf("column name: %s\n", ed.Columns[i].Name.ToDistSQL())
+			fmt.Printf("column plain: %s\n", ed.Columns[i].Plain.ToDistSQL())
+			fmt.Printf("column cipher: %s\n", ed.Columns[i].Cipher.ToDistSQL())
+			fmt.Printf("column assistedQueryColumn: %s, %d, %s\n", ed.Columns[i].AssistedQueryColumn.ToDistSQL(), len(ed.Columns[i].AssistedQueryColumn), ed.Columns[i].AssistedQueryColumn)
+			fmt.Printf("column likeQueryColumn: %s, %d, %s\n", ed.Columns[i].LikeQueryColumn.ToDistSQL(), len(ed.Columns[i].LikeQueryColumn), ed.Columns[i].LikeQueryColumn)
+			if ed.Columns[i].LikeQueryAlgorithm != nil {
+				fmt.Printf("column likeQueryAlgo: %s\n", ed.Columns[i].LikeQueryAlgorithm.ToDistSQL())
+			}
+			if ed.Columns[i].AssistedQueryAlgorithm != nil {
+				fmt.Printf("column assistedQueryAlgo: %s\n", ed.Columns[i].AssistedQueryAlgorithm.ToDistSQL())
+			}
+			if ed.Columns[i].EncryptionAlgorithm != nil {
+				fmt.Printf("column encryptionAlgo: %s\n", ed.Columns[i].EncryptionAlgorithm.ToDistSQL())
+			}
+		}
+	}
 }
 
 func (r *ClusterReconciler) createEncryption(ctx context.Context, cluster *v1alpha1.Cluster, schema string) error {
@@ -306,12 +379,32 @@ func (r *ClusterReconciler) createEncryption(ctx context.Context, cluster *v1alp
 		database string = schema
 	)
 	distsql := cluster.Spec.Schemas[0].Encryption.ToDistSQL()
-	dbconn, err := gorm.Open(dialects, fmt.Sprintf("%s:%s@(%s)/%s?charset=utf8&parseTime=True&loc=Local", user, pass, host, database))
+	// ent := cluster.Spec.Schemas[0].Encryption
+	// check(ent)
+	// return nil
+
+	host = hookHostFromEnv(host)
+
+	// dbconn, err := gorm.Open(dialects, fmt.Sprintf("%s:%s@(%s)/%s?charset=utf8&parseTime=True&loc=Local", user, pass, host, database))
+	// if err != nil {
+	// 	return err
+	// }
+	// dbconn.LogMode(true)
+	// if dbconn.Raw(fmt.Sprintf("USE %s; %s", schema, distsql)).Error != nil {
+	// 	return err
+	// }
+
+	dbconn, err := sql.Open(dialects, fmt.Sprintf("%s:%s@(%s)/%s", user, pass, host, database))
 	if err != nil {
 		return err
 	}
-	dbconn.LogMode(true)
-	if dbconn.Raw(fmt.Sprintf("USE %s; %s", schema, distsql)).Error != nil {
+
+	// distsql := ent.ToDistSQL()
+
+	distsql = fmt.Sprintf("CREATE ENCRYPT RULE %s", distsql)
+	fmt.Printf("create encryption: sql: %s\n", distsql)
+	// if _, err := dbconn.Exec(fmt.Sprintf("USE %s; %s", schema, distsql)); err != nil {
+	if _, err := dbconn.Exec(distsql); err != nil {
 		return err
 	}
 
