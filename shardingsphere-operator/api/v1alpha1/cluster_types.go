@@ -120,16 +120,25 @@ type EncryptDefinition struct {
 
 func (t *EncryptDefinition) ToDistSQL() string {
 	var stmt string
-	stmt = fmt.Sprintf("%s (COLUMNS %s), %s)", t.Name, t.Columns.ToDistSQL(), t.QueryWithCipherColumn.ToDistSQL())
+	// stmt = fmt.Sprintf("%s (COLUMNS %s), %s)", t.Name, t.Columns.ToDistSQL(), t.QueryWithCipherColumn.ToDistSQL())
+
+	// if t.QueryWithCipherColumn {
+	// 	stmt = fmt.Sprintf("%s (COLUMNS %s, %s)", t.Name, t.Columns.ToDistSQL(), t.QueryWithCipherColumn.ToDistSQL())
+	// } else {
+	// 	stmt = fmt.Sprintf("%s (COLUMNS %s)", t.Name, t.Columns.ToDistSQL())
+	// }
+
+	stmt = fmt.Sprintf("%s (COLUMNS (%s), %s)", t.Name, t.Columns.ToDistSQL(), t.QueryWithCipherColumn.ToDistSQL())
+
 	return stmt
 }
 
 type ColumnList []Column
 
-func (t *ColumnList) ToDistSQL() string {
+func (t ColumnList) ToDistSQL() string {
 	var stmt string
-	for _, c := range *t {
-		stmt = fmt.Sprintf("%s (%s),", stmt, c.ToDistSQL())
+	for i := range t {
+		stmt = fmt.Sprintf("%s (%s),", stmt, t[i].ToDistSQL())
 	}
 	stmt = strings.TrimSuffix(stmt, ",")
 	return stmt
@@ -221,7 +230,15 @@ func (t *LikeQueryColumn) ToDistSQL() string {
 type EncryptionAlgorithmType AlgorithmType
 
 func (r *EncryptionAlgorithmType) ToDistSQL() string {
-	return fmt.Sprintf("ENCRYPT_ALGORITHM(%s)", r.ToDistSQL())
+	var stmt string
+	if len(r.Properties) == 0 {
+		stmt = fmt.Sprintf("NAME='%s'", r.Name)
+	} else {
+		stmt = fmt.Sprintf("NAME='%s', %s", r.Name, r.Properties.ToDistSQL())
+	}
+
+	stmt = fmt.Sprintf("TYPE(%s)", stmt)
+	return fmt.Sprintf("ENCRYPT_ALGORITHM(%s)", stmt)
 }
 
 // type AssistedQueryAlgorithmType struct {
@@ -231,7 +248,15 @@ func (r *EncryptionAlgorithmType) ToDistSQL() string {
 type AssistedQueryAlgorithmType AlgorithmType
 
 func (r *AssistedQueryAlgorithmType) ToDistSQL() string {
-	return fmt.Sprintf("ASSISTED_QUERY_ALGORITHM(%s)", r.ToDistSQL())
+	var stmt string
+	if r.Properties != nil && len(r.Properties) > 0 {
+		stmt = fmt.Sprintf("NAME=%s, %s", r.Name, r.Properties.ToDistSQL())
+	} else {
+		stmt = fmt.Sprintf("NAME='%s'", r.Name)
+	}
+
+	stmt = fmt.Sprintf("TYPE(%s)", stmt)
+	return fmt.Sprintf("ASSISTED_QUERY_ALGORITHM(%s)", stmt)
 }
 
 // type LikeQueryAlgorithmType struct {
@@ -241,7 +266,15 @@ func (r *AssistedQueryAlgorithmType) ToDistSQL() string {
 type LikeQueryAlgorithmType AlgorithmType
 
 func (r *LikeQueryAlgorithmType) ToDistSQL() string {
-	return fmt.Sprintf("LIKE_QUERY_ALGORITHM(%s)", r.ToDistSQL())
+	var stmt string
+	if r.Properties != nil && len(r.Properties) > 0 {
+		stmt = fmt.Sprintf("NAME=%s, %s", r.Name, r.Properties.ToDistSQL())
+	} else {
+		stmt = fmt.Sprintf("NAME='%s'", r.Name)
+	}
+
+	stmt = fmt.Sprintf("TYPE(%s)", stmt)
+	return fmt.Sprintf("LIKE_QUERY_ALGORITHM(%s)", stmt)
 }
 
 type AlgorithmType struct {
@@ -249,12 +282,12 @@ type AlgorithmType struct {
 	Properties Properties `json:"properties,omitempty"`
 }
 
-func (t *AlgorithmType) ToDistSQL() string {
+func (r *AlgorithmType) ToDistSQL() string {
 	var stmt string
-	if len(t.Properties) == 0 {
-		stmt = fmt.Sprintf("NAME='%s'", t.Name)
+	if r.Properties != nil && len(r.Properties) > 0 {
+		stmt = fmt.Sprintf("NAME=%s, %s", r.Name, r.Properties.ToDistSQL())
 	} else {
-		stmt = fmt.Sprintf("NAME=%s, %s", t.Name, t.Properties.ToDistSQL())
+		stmt = fmt.Sprintf("NAME='%s'", r.Name)
 	}
 
 	return fmt.Sprintf("TYPE(%s)", stmt)
@@ -277,9 +310,9 @@ type QueryWithCipherColumn bool
 
 func (t *QueryWithCipherColumn) ToDistSQL() string {
 	if *t {
-		return "QUERY_ WITH_CIPHER_COLUMN=true"
+		return "QUERY_WITH_CIPHER_COLUMN=true"
 	} else {
-		return "QUERY_ WITH_CIPHER_COLUMN=false"
+		return "QUERY_WITH_CIPHER_COLUMN=FALSE"
 	}
 }
 
