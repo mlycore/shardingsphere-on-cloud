@@ -163,33 +163,6 @@ func (r *ComputeNodeReconciler) createService(ctx context.Context, cn *v1alpha1.
 }
 
 func (r *ComputeNodeReconciler) updateService(ctx context.Context, cn *v1alpha1.ComputeNode, cur *corev1.Service) error {
-	// if cn.Spec.ServiceType == v1.ServiceTypeNodePort {
-	// 	for idx := range cur.Spec.Ports {
-	// 		for i := range cn.Spec.PortBindings {
-	// 			if cur.Spec.Ports[idx].Name == cn.Spec.PortBindings[i].Name {
-	// 				if cn.Spec.PortBindings[i].NodePort == 0 {
-	// 					cn.Spec.PortBindings[i].NodePort = cur.Spec.Ports[idx].NodePort
-	// 					if err := r.Update(ctx, cn); err != nil {
-	// 						return err
-	// 					}
-	// 				}
-	// 				break
-	// 			}
-	// 		}
-	// 	}
-	// }
-	// if cn.Spec.ServiceType == v1.ServiceTypeClusterIP {
-	// 	for idx := range cn.Spec.PortBindings {
-	// 		if cn.Spec.PortBindings[idx].NodePort != 0 {
-	// 			cn.Spec.PortBindings[idx].NodePort = 0
-	// 			if err := r.Update(ctx, cn); err != nil {
-	// 				return err
-	// 			}
-	// 			break
-	// 		}
-	// 	}
-	// }
-
 	switch cn.Spec.ServiceType {
 	case corev1.ServiceTypeClusterIP:
 		updateServiceClusterIP(cn.Spec.PortBindings)
@@ -217,10 +190,6 @@ func updateServiceNodePort(portBindings []v1alpha1.PortBinding, svcports []corev
 			if svcports[idx].Name == portBindings[i].Name {
 				if portBindings[i].NodePort == 0 {
 					portBindings[i].NodePort = svcports[idx].NodePort
-					break
-					// if err := r.Update(ctx, cn); err != nil {
-					// 	return err
-					// }
 				}
 				break
 			}
@@ -232,9 +201,6 @@ func updateServiceClusterIP(portBindings []v1alpha1.PortBinding) {
 	for idx := range portBindings {
 		if portBindings[idx].NodePort != 0 {
 			portBindings[idx].NodePort = 0
-			// if err := r.Update(ctx, cn); err != nil {
-			// 	return err
-			// }
 			break
 		}
 	}
