@@ -37,3 +37,7 @@ jobs:
         run: |
           cd shardingsphere-operator
           make e2e 
+      - name: "shardingsphere operator e2e test"
+        run: |
+          cd shardingsphere-operator/test/e2e/frm
+          go test -v . 
