@@ -22,6 +22,9 @@ import (
 	"os"
 
 	"github.com/apache/shardingsphere-on-cloud/shardingsphere-operator/pkg/controllers"
+	"github.com/apache/shardingsphere-on-cloud/shardingsphere-operator/pkg/kubernetes/configmap"
+	"github.com/apache/shardingsphere-on-cloud/shardingsphere-operator/pkg/kubernetes/deployment"
+	"github.com/apache/shardingsphere-on-cloud/shardingsphere-operator/pkg/kubernetes/service"
 	"github.com/apache/shardingsphere-on-cloud/shardingsphere-operator/pkg/metrics"
 
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -49,20 +52,16 @@ func SetupWithOptions(opts *Options) *Manager {
 		logger.Error(err, "unable to start manager")
 		os.Exit(1)
 	}
-	if err = (&controllers.ProxyReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-		Log:    mgr.GetLogger(),
+
+	if err := (&controllers.ComputeNodeReconciler{
+		Client:     mgr.GetClient(),
+		Scheme:     mgr.GetScheme(),
+		Log:        mgr.GetLogger(),
+		Deployment: deployment.NewDeploymentClient(mgr.GetClient()),
+		Service:    service.NewServiceClient(mgr.GetClient()),
+		ConfigMap:  configmap.NewConfigMapClient(mgr.GetClient()),
 	}).SetupWithManager(mgr); err != nil {
-		logger.Error(err, "unable to create controller", "controller", "ShardingSphereProxy")
-		os.Exit(1)
-	}
-	if err = (&controllers.ProxyConfigReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-		Log:    mgr.GetLogger(),
-	}).SetupWithManager(mgr); err != nil {
-		logger.Error(err, "unable to create controller", "controller", "ShardingSphereProxyServerConfig")
+		logger.Error(err, "unable to create controller", "controller", "ComputeNode")
 		os.Exit(1)
 	}
 

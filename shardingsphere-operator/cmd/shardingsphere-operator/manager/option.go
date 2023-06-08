@@ -26,7 +26,6 @@ import (
 	sschaos "github.com/apache/shardingsphere-on-cloud/shardingsphere-operator/pkg/kubernetes/chaosmesh"
 	cloudnativepg "github.com/apache/shardingsphere-on-cloud/shardingsphere-operator/pkg/kubernetes/cloudnative-pg"
 	"github.com/apache/shardingsphere-on-cloud/shardingsphere-operator/pkg/kubernetes/configmap"
-	"github.com/apache/shardingsphere-on-cloud/shardingsphere-operator/pkg/kubernetes/deployment"
 	"github.com/apache/shardingsphere-on-cloud/shardingsphere-operator/pkg/kubernetes/job"
 	"github.com/apache/shardingsphere-on-cloud/shardingsphere-operator/pkg/kubernetes/service"
 
@@ -131,21 +130,30 @@ func (opts *Options) ParseFeatureGates() []FeatureGateHandler {
 type FeatureGateHandler func(mgr manager.Manager) error
 
 var featureGatesHandlers = map[string]FeatureGateHandler{
-	"ComputeNode": func(mgr manager.Manager) error {
-		if err := (&controllers.ComputeNodeReconciler{
-			Client:     mgr.GetClient(),
-			Scheme:     mgr.GetScheme(),
-			Log:        mgr.GetLogger(),
-			Deployment: deployment.NewDeploymentClient(mgr.GetClient()),
-			Service:    service.NewServiceClient(mgr.GetClient()),
-			ConfigMap:  configmap.NewConfigMapClient(mgr.GetClient()),
+	"Proxy": func(mgr manager.Manager) error {
+		if err := (&controllers.ProxyReconciler{
+			Client: mgr.GetClient(),
+			Scheme: mgr.GetScheme(),
+			Log:    mgr.GetLogger(),
 		}).SetupWithManager(mgr); err != nil {
-			logger.Error(err, "unable to create controller", "controller", "ComputeNode")
+			logger.Error(err, "unable to create controller", "controller", "ShardingSphereProxy")
 			return err
 		}
-
 		return nil
 	},
+
+	"ProxyConfig": func(mgr manager.Manager) error {
+		if err := (&controllers.ProxyConfigReconciler{
+			Client: mgr.GetClient(),
+			Scheme: mgr.GetScheme(),
+			Log:    mgr.GetLogger(),
+		}).SetupWithManager(mgr); err != nil {
+			logger.Error(err, "unable to create controller", "controller", "ShardingSphereProxyServerConfig")
+			return err
+		}
+		return nil
+	},
+
 	"StorageNode": func(mgr manager.Manager) error {
 		reconciler := &controllers.StorageNodeReconciler{
 			Client:   mgr.GetClient(),
@@ -168,6 +176,7 @@ var featureGatesHandlers = map[string]FeatureGateHandler{
 		}
 		return nil
 	},
+
 	"Chaos": func(mgr manager.Manager) error {
 		clientset, err := clientset.NewForConfig(mgr.GetConfig())
 		if err != nil {
