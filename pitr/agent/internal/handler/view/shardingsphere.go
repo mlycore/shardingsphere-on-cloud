@@ -15,19 +15,9 @@
  * limitations under the License.
  */
 
-package pkg
+package view
 
-import "github.com/apache/shardingsphere-on-cloud/pitr/agent/pkg/logging"
-
-var (
-	OG             IOpenGauss
-	ShardingSphere IShardingSphere
-)
-
-func InitOG(shell, pgData string, log logging.ILog) {
-	OG = NewOpenGauss(shell, pgData, log)
+type RestartShardingSphereIn struct {
+	Args []string `json:"args,omitempty"`
 }
-
-func InitShardingSphere(shell, path string, log logging.ILog) {
-	ShardingSphere = NewShardingSphere(shell, path, log)
-}
+type RestartShardingSphereOut struct{}

@@ -45,12 +45,13 @@ var (
 )
 
 var (
-	logLevel      string
-	port          string
-	pgData        string
-	tlsCrt        string
-	tlsKey        string
-	envSourceFile string
+	logLevel           string
+	port               string
+	pgData             string
+	tlsCrt             string
+	tlsKey             string
+	envSourceFile      string
+	shardingspherePath string
 )
 
 func init() {
@@ -64,6 +65,7 @@ func init() {
 	flag.StringVar(&pgData, "pgdata", "", "Optional:Get the value from cli flags or env")
 
 	flag.StringVar(&envSourceFile, "env-source-file", "", "Optional:env source file path")
+	flag.StringVar(&shardingspherePath, "ss-path", "", "Optional:shardingsphere home")
 }
 
 func main() {
@@ -116,7 +118,8 @@ func main() {
 	}
 
 	log = logging.Init(level)
-	pkg.Init(shell, pgData, log)
+	pkg.InitOG(shell, pgData, log)
+	pkg.InitShardingSphere(shell, shardingspherePath, log)
 
 	SetupApp()
 
@@ -168,6 +171,7 @@ func SetupApp() {
 		r.Post("/show", handler.Show)
 		r.Post("/show/list", handler.ShowList)
 		r.Post("/diskspace", handler.DiskSpace)
+		r.Post("/shardingsphere/restart", handler.RestartShardingSphere)
 	})
 
 	// 404

@@ -15,19 +15,31 @@
  * limitations under the License.
  */
 
-package pkg
+package handler
 
-import "github.com/apache/shardingsphere-on-cloud/pitr/agent/pkg/logging"
+import (
+	"fmt"
 
-var (
-	OG             IOpenGauss
-	ShardingSphere IShardingSphere
+	"github.com/apache/shardingsphere-on-cloud/pitr/agent/internal/cons"
+	"github.com/apache/shardingsphere-on-cloud/pitr/agent/internal/handler/view"
+	"github.com/apache/shardingsphere-on-cloud/pitr/agent/internal/pkg"
+	"github.com/apache/shardingsphere-on-cloud/pitr/agent/pkg/responder"
+	"github.com/gofiber/fiber/v2"
 )
 
-func InitOG(shell, pgData string, log logging.ILog) {
-	OG = NewOpenGauss(shell, pgData, log)
-}
+func RestartShardingSphere(ctx *fiber.Ctx) (err error) {
+	in := &view.RestartShardingSphereIn{}
 
-func InitShardingSphere(shell, path string, log logging.ILog) {
-	ShardingSphere = NewShardingSphere(shell, path, log)
+	if err = ctx.BodyParser(in); err != nil {
+		err = fmt.Errorf("body parse err=%s,wrap=%w", err, cons.BodyParseFailed)
+		return
+	}
+
+	// restart shardingsphere
+	if err = pkg.ShardingSphere.Restart(in.Args); err != nil {
+		err = fmt.Errorf("stop ShardingSphere failure, err=%w", err)
+		return
+	}
+
+	return responder.Success(ctx, nil)
 }
