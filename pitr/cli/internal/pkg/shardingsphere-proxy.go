@@ -41,6 +41,7 @@ type (
 		Unlock() error
 		ImportMetaData(in *model.ClusterInfo) error
 		DropDatabase(shardingDBName string) error
+		Restart() error
 	}
 )
 
@@ -222,5 +223,11 @@ func (ss *shardingSphereProxy) DropDatabase(databaseName string) error {
 	if err != nil {
 		return xerr.NewCliErr(fmt.Sprintf("drop database failure, err:%s", err.Error()))
 	}
+	return nil
+}
+
+// Restart 重启 ShardingSphere Proxy
+func (ss *shardingSphereProxy) Restart() error {
+
 	return nil
 }

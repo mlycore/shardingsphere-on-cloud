@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/apache/shardingsphere-on-cloud/pitr/cli/internal/cmd/view"
 	"github.com/apache/shardingsphere-on-cloud/pitr/cli/internal/pkg/model"
 	"github.com/apache/shardingsphere-on-cloud/pitr/cli/internal/pkg/xerr"
 	"github.com/apache/shardingsphere-on-cloud/pitr/cli/pkg/httputils"
@@ -30,12 +31,13 @@ import (
 type agentServer struct {
 	addr string
 
-	_apiBackup      string
-	_apiRestore     string
-	_apiShowDetail  string
-	_apiShowList    string
-	_apiDiskspace   string
-	_apiHealthCheck string
+	_apiBackup                string
+	_apiRestore               string
+	_apiShowDetail            string
+	_apiShowList              string
+	_apiDiskspace             string
+	_apiHealthCheck           string
+	_apiRestartShardingSphere string
 }
 
 type IAgentServer interface {
@@ -46,6 +48,7 @@ type IAgentServer interface {
 	ShowDetail(in *model.ShowDetailIn) (*model.BackupInfo, error)
 	ShowList(in *model.ShowListIn) ([]model.BackupInfo, error)
 	ShowDiskSpace(in *model.DiskSpaceIn) (*model.DiskSpaceInfo, error)
+	RestartShardingSphere(in *view.RestartShardingSphereIn) error
 }
 
 var _ IAgentServer = (*agentServer)(nil)
@@ -54,12 +57,13 @@ func NewAgentServer(addr string) IAgentServer {
 	return &agentServer{
 		addr: addr,
 
-		_apiBackup:      "/api/backup",
-		_apiRestore:     "/api/restore",
-		_apiShowDetail:  "/api/show",
-		_apiShowList:    "/api/show/list",
-		_apiDiskspace:   "/api/diskspace",
-		_apiHealthCheck: "/api/healthz",
+		_apiBackup:                "/api/backup",
+		_apiRestore:               "/api/restore",
+		_apiShowDetail:            "/api/show",
+		_apiShowList:              "/api/show/list",
+		_apiDiskspace:             "/api/diskspace",
+		_apiHealthCheck:           "/api/healthz",
+		_apiRestartShardingSphere: "/api/shardingsphere/restart",
 	}
 }
 
@@ -173,6 +177,25 @@ func (as *agentServer) DeleteBackup(in *model.DeleteBackupIn) error {
 
 	out := &model.DeleteBackupOut{}
 	r := httputils.NewRequest(context.Background(), http.MethodDelete, url)
+	r.Body(in)
+
+	if err := r.Send(out); err != nil {
+		return xerr.NewUnknownErr(url, in, out, err)
+	}
+
+	if out.Code != 0 {
+		return xerr.NewAgentServerErr(out.Code, out.Msg)
+	}
+
+	return nil
+}
+
+// nolint:dupl
+func (as *agentServer) RestartShardingSphere(in *view.RestartShardingSphereIn) error {
+	url := fmt.Sprintf("%s%s", as.addr, as._apiBackup)
+
+	out := &view.RestartShardingSphereOut{}
+	r := httputils.NewRequest(context.Background(), http.MethodPost, url)
 	r.Body(in)
 
 	if err := r.Send(out); err != nil {

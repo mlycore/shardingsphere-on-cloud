@@ -23,6 +23,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/apache/shardingsphere-on-cloud/pitr/cli/internal/cmd/view"
 	"github.com/apache/shardingsphere-on-cloud/pitr/cli/internal/pkg"
 	"github.com/apache/shardingsphere-on-cloud/pitr/cli/internal/pkg/model"
 	"github.com/apache/shardingsphere-on-cloud/pitr/cli/internal/pkg/xerr"
@@ -94,6 +95,8 @@ func restore() error {
 		return xerr.NewCliErr(fmt.Sprintf("new ss-proxy failed, err:%s", err.Error()))
 	}
 
+	as := pkg.NewAgentServer(fmt.Sprintf("%s:%d", Host, AgentPort))
+
 	// get backup record
 	var bak *model.LsBackup
 	if CSN != "" {
@@ -133,7 +136,7 @@ func restore() error {
 
 	logging.Info("Restore backup data to openGauss success!")
 	// restore metadata to ss-proxy
-	if err := restoreDataToSSProxy(proxy, bak); err != nil {
+	if err := restoreDataToSSProxy(proxy, as, bak); err != nil {
 		return xerr.NewCliErr(fmt.Sprintf("restore metadata to ss-proxy failed:%s", err.Error()))
 	}
 	logging.Info("Restore success!")
@@ -164,13 +167,17 @@ func checkDatabaseExist(proxy pkg.IShardingSphereProxy, bak *model.LsBackup) err
 	return getUserApproveInTerminal(prompt)
 }
 
-func restoreDataToSSProxy(proxy pkg.IShardingSphereProxy, lsBackup *model.LsBackup) error {
+func restoreDataToSSProxy(proxy pkg.IShardingSphereProxy, as pkg.IAgentServer, lsBackup *model.LsBackup) error {
 	// drop database if exists
 	for _, shardingDBName := range databaseNamesExist {
 		logging.Info(fmt.Sprintf("Dropping database: [%s] ...", shardingDBName))
 		if err := proxy.DropDatabase(shardingDBName); err != nil {
 			return xerr.NewCliErr(fmt.Sprintf("drop database failed:%s", err.Error()))
 		}
+	}
+
+	if err := as.RestartShardingSphere(&view.RestartShardingSphereIn{Args: []string{"3308"}}); err != nil {
+		return xerr.NewCliErr(fmt.Sprintf("restart ss-proxy failed:%s", err.Error()))
 	}
 
 	// import metadata
